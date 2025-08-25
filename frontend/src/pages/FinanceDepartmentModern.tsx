@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getApiUrl } from '../config/api';
 import { 
   DollarSign, 
   Plus,
@@ -137,7 +138,7 @@ const FinanceDepartmentNew: React.FC<FinanceDepartmentProps> = ({ user, onLogout
   const fetchDashboardStats = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/finance/payments/stats', {
+      const response = await axios.get(getApiUrl('api/finance/payments/stats'), {
         headers: { Authorization: `Bearer ${token}` }
       });
       setDashboardStats(response.data);
@@ -156,7 +157,7 @@ const FinanceDepartmentNew: React.FC<FinanceDepartmentProps> = ({ user, onLogout
         ...filters
       });
       
-      const response = await axios.get(`http://localhost:5000/api/finance/payments?${params}`, {
+      const response = await axios.get(getApiUrl(`api/finance/payments?${params}`), {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -170,7 +171,7 @@ const FinanceDepartmentNew: React.FC<FinanceDepartmentProps> = ({ user, onLogout
   const fetchOutstandingPayments = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/finance/outstanding', {
+      const response = await axios.get(getApiUrl('api/finance/outstanding'), {
         headers: { Authorization: `Bearer ${token}` }
       });
       setPayments(response.data.payments || response.data.data || []);
@@ -182,7 +183,7 @@ const FinanceDepartmentNew: React.FC<FinanceDepartmentProps> = ({ user, onLogout
   const fetchStudents = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/student-management/students', {
+      const response = await axios.get(getApiUrl('api/student-management/students'), {
         headers: { Authorization: `Bearer ${token}` }
       });
       setStudents(response.data.students || response.data.data || []);
@@ -194,7 +195,7 @@ const FinanceDepartmentNew: React.FC<FinanceDepartmentProps> = ({ user, onLogout
   const fetchBranches = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/branches', {
+      const response = await axios.get(getApiUrl('api/branches'), {
         headers: { Authorization: `Bearer ${token}` }
       });
       setBranches(response.data.branches || response.data.data || []);
@@ -206,7 +207,7 @@ const FinanceDepartmentNew: React.FC<FinanceDepartmentProps> = ({ user, onLogout
   const fetchPaymentHistory = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/finance/payments', {
+      const response = await axios.get(getApiUrl('api/finance/payments'), {
         headers: { Authorization: `Bearer ${token}` }
       });
       setPaymentHistory(response.data.history || response.data.payments || response.data.data || []);
@@ -218,7 +219,7 @@ const FinanceDepartmentNew: React.FC<FinanceDepartmentProps> = ({ user, onLogout
   const updatePaymentStatus = async (paymentId: string, status: string) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.patch(`http://localhost:5000/api/finance/payments/${paymentId}`, 
+      await axios.patch(getApiUrl(`api/finance/payments/${paymentId}`), 
         { status },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -231,7 +232,7 @@ const FinanceDepartmentNew: React.FC<FinanceDepartmentProps> = ({ user, onLogout
   const createPayment = async () => {
     try {
       const token = localStorage.getItem('token');
-      await axios.post('http://localhost:5000/api/finance/payments', newPayment, {
+      await axios.post(getApiUrl('api/finance/payments'), newPayment, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setShowAddPaymentModal(false);

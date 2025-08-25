@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getApiUrl } from '../config/api';
 import { 
   Plus, 
   Search, 
@@ -80,7 +81,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ user: _user, onLo
         ...filters
       });
       
-      const response = await axios.get(`http://localhost:5000/api/students?${params}`, {
+      const response = await axios.get(getApiUrl(`api/students?${params}`), {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -96,7 +97,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ user: _user, onLo
   const fetchBranches = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/branches', {
+      const response = await axios.get(getApiUrl('api/branches'), {
         headers: { Authorization: `Bearer ${token}` }
       });
       setBranches(response.data.branches);
@@ -149,7 +150,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ user: _user, onLo
       const token = localStorage.getItem('token');
       console.log(`🗑️ Frontend: Attempting to delete student ${studentId}`);
       
-      const response = await axios.delete(`http://localhost:5000/api/students/delete/${studentId}`, {
+      const response = await axios.delete(getApiUrl(`api/students/delete/${studentId}`), {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -219,7 +220,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ user: _user, onLo
   const fetchBranchStats = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/students/stats/branches', {
+      const response = await axios.get(getApiUrl('api/students/stats/branches'), {
         headers: { Authorization: `Bearer ${token}` }
       });
       setBranchStats(response.data || []);
@@ -243,7 +244,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ user: _user, onLo
       if (filters.branch) params.append('branch', filters.branch);
       if (filters.semester) params.append('semester', filters.semester);
       
-      const response = await axios.get(`http://localhost:5000/api/students/export?${params}`, {
+      const response = await axios.get(getApiUrl(`api/students/export?${params}`), {
         headers: { Authorization: `Bearer ${token}` },
         responseType: 'blob'
       });
@@ -1055,7 +1056,7 @@ const StudentModal: React.FC<{
       // Check for duplicate registration number only when adding a new student
       if (!student) {
         try {
-          const checkResponse = await axios.get(`http://localhost:5000/api/students/check-regdno/${formData.regdNo}`, {
+          const checkResponse = await axios.get(getApiUrl(`api/students/check-regdno/${formData.regdNo}`), {
             headers: { Authorization: `Bearer ${token}` }
           });
           

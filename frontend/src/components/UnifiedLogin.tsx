@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getApiUrl } from '../config/api';
 import { User, Lock, Calendar, LogIn, UserCog, GraduationCap, BookOpen } from 'lucide-react';
 import axios from 'axios';
 
@@ -60,11 +61,11 @@ const UnifiedLogin: React.FC<UnifiedLoginProps> = ({ onLogin }) => {
     try {
       let response;
       if (loginType === 'admin') {
-        response = await axios.post('http://localhost:5000/api/auth/admin/login', adminData);
+        response = await axios.post(getApiUrl('api/auth/admin/login'), adminData);
       } else if (loginType === 'faculty') {
-        response = await axios.post('http://localhost:5000/api/auth/admin/login', facultyData);
+        response = await axios.post(getApiUrl('api/auth/admin/login'), facultyData);
       } else {
-        response = await axios.post('http://localhost:5000/api/auth/student/login', studentData);
+        response = await axios.post(getApiUrl('api/auth/student/login'), studentData);
       }
       
       if (response.data.success) {
