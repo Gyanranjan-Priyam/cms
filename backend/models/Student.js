@@ -4,9 +4,9 @@ const studentSchema = new mongoose.Schema({
   regdNo: { 
     type: String, 
     required: true, 
-    unique: true,
     trim: true,
     uppercase: true
+    // Note: unique index is defined separately below
   },
   firstName: { 
     type: String, 
@@ -21,9 +21,9 @@ const studentSchema = new mongoose.Schema({
   email: { 
     type: String, 
     required: true,
-    unique: true,
     lowercase: true,
     trim: true
+    // Note: unique index is defined separately below
   },
   phone: { 
     type: String, 
@@ -181,13 +181,12 @@ const studentSchema = new mongoose.Schema({
     ref: 'User'
   },
   
-  // Login credentials (if students have direct login)
-  username: {
-    type: String,
-    sparse: true, // Allow null values but enforce uniqueness when present
-    unique: true,
-    trim: true
-  },
+  // Login credentials (if students have direct login) - TEMPORARILY DISABLED
+  // username: {
+  //   type: String,
+  //   trim: true
+  //   // Note: unique index is defined separately below with sparse option
+  // },
   password: {
     type: String,
     select: false // Don't include in queries by default
@@ -200,7 +199,8 @@ const studentSchema = new mongoose.Schema({
     type: Date
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  autoIndex: false // Disable automatic index creation by Mongoose
 });
 
 // Pre-save middleware to calculate total fee
@@ -270,12 +270,7 @@ studentSchema.statics.getFeeSummary = async function(studentId) {
   };
 };
 
-// Indexes for better performance
-studentSchema.index({ regdNo: 1 });
-studentSchema.index({ email: 1 });
-studentSchema.index({ branch: 1, semester: 1 });
-studentSchema.index({ isActive: 1 });
-studentSchema.index({ academicYear: 1 });
-studentSchema.index({ username: 1 });
+// Note: Indexes are managed manually via setup scripts to avoid conflicts
+// This prevents Mongoose from creating duplicate indexes
 
 module.exports = mongoose.model('Student', studentSchema);

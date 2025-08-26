@@ -4,11 +4,9 @@ import UnifiedLogin from '@/components/UnifiedLogin';
 import SessionWarningModal from '@/components/SessionWarningModal';
 import SessionTest from '@/components/SessionTest';
 import { useSessionTimeout } from '@/hooks/useSessionTimeout';
-import AdminDashboardNew from '@/pages/AdminDashboardNew';
-import StudentManagement from '@/pages/StudentManagement';
-import FinanceDepartment from '@/pages/FinanceDepartmentModern';
+import AdminDashboard from '@/pages/AdminDashboard';
 import StudentDashboard from '@/pages/StudentDashboardNew';
-import FacultyDashboard from '@/pages/FacultyDashboard';
+import FinanceDashboard from '@/pages/FinanceDashboard';
 import PaymentResult from '@/pages/PaymentResult';
 import CustomPayment from '@/pages/CustomPayment';
 import './App.css';
@@ -130,16 +128,15 @@ function App() {
               user ? (
                 user.role === 'student' ? (
                   <Navigate to={`/student-dashboard/${user.regdNo}`} replace />
-                ) : user.role === 'faculty' ? (
-                  <Navigate to="/faculty-dashboard" replace />
                 ) : user.role === 'head_admin' || user.role === 'admin' ? (
                   <Navigate to="/head-admin" replace />
-                ) : user.role === 'student_management' ? (
-                  <Navigate to="/student-management" replace />
-                ) : user.role === 'finance_department' ? (
-                  <Navigate to="/finance-department" replace />
+                ) : user.role === 'finance_department' || user.role === 'finance_officer' ? (
+                  <Navigate to="/finance-dashboard" replace />
+                ) : user.role === 'faculty' ? (
+                  <Navigate to="/faculty-dashboard" replace />
                 ) : (
-                  <Navigate to="/head-admin" replace />
+                  // Fallback for any other roles, maybe logout or show an error
+                  <Navigate to="/" replace />
                 )
               ) : (
                 <UnifiedLogin onLogin={handleLogin} />
@@ -167,10 +164,9 @@ function App() {
             path="/head-admin" 
             element={
               user?.role === 'head_admin' || user?.role === 'admin' ? (
-                <AdminDashboardNew 
-                  user={user} 
+                <AdminDashboard
+                  user={user}
                   onLogout={handleLogout}
-                  getRemainingTime={getRemainingTime}
                 />
               ) : (
                 <Navigate to="/" replace />
@@ -178,36 +174,33 @@ function App() {
             } 
           />
           
+          {/* Finance Department Route */}
           <Route 
-            path="/student-management" 
+            path="/finance-dashboard" 
             element={
-              user?.role === 'student_management' || user?.role === 'head_admin' || user?.role === 'admin' ? (
-                <StudentManagement user={user} onLogout={handleLogout} getRemainingTime={getRemainingTime} />
+              user?.role === 'finance_department' || user?.role === 'finance_officer' || user?.role === 'head_admin' || user?.role === 'admin' ? (
+                <FinanceDashboard />
               ) : (
                 <Navigate to="/" replace />
               )
             } 
           />
           
-          <Route 
+          {/* <Route 
             path="/finance-department" 
             element={
-              user?.role === 'finance_department' || user?.role === 'head_admin' || user?.role === 'admin' ? (
+              user?.role === 'finance_department' || user?.role === 'finance_officer' || user?.role === 'head_admin' || user?.role === 'admin' ? (
                 <FinanceDepartment user={user} onLogout={handleLogout} getRemainingTime={getRemainingTime} />
               ) : (
                 <Navigate to="/" replace />
               )
             } 
-          />
+          /> */}
           
           <Route 
             path="/faculty-dashboard" 
             element={
-              user?.role === 'faculty' ? (
-                <FacultyDashboard user={user} onLogout={handleLogout} getRemainingTime={getRemainingTime} />
-              ) : (
-                <Navigate to="/" replace />
-              )
+              <Navigate to="/" replace />
             } 
           />
           
@@ -253,9 +246,7 @@ function App() {
               user ? (
                 user.role === 'head_admin' || user.role === 'admin' ? (
                   <Navigate to="/head-admin" replace />
-                ) : user.role === 'student_management' ? (
-                  <Navigate to="/student-management" replace />
-                ) : user.role === 'finance_department' ? (
+                ) : user.role === 'finance_department' || user.role === 'finance_officer' ? (
                   <Navigate to="/finance-department" replace />
                 ) : (
                   <Navigate to="/" replace />

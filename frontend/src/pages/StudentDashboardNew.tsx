@@ -26,10 +26,11 @@ import {
   Home,
   Eye,
   EyeOff,
-  Printer
+  Printer,
+  ChevronRight,
+  ChevronLeft
 } from 'lucide-react';
 import axios from 'axios';
-import { SidebarProvider, Sidebar, SidebarBody } from '../components/ui/sidebar';
 import SessionIndicator from '../components/SessionIndicator';
 
 interface StudentDashboardProps {
@@ -39,40 +40,6 @@ interface StudentDashboardProps {
 }
 
 // Type definitions for better TypeScript support
-interface Result {
-  _id: string;
-  semester: number;
-  sgpa: string;
-  totalCredits: number;
-  earnedCredits: number;
-  percentage: string;
-  status: string;
-  subjects: Array<{
-    subjectName: string;
-    grade: string;
-    gradePoints: number;
-  }>;
-}
-
-interface AttendanceRecord {
-  _id: string;
-  semester: number;
-  academicYear: string;
-  overallAttendance: {
-    totalClasses: number;
-    attendedClasses: number;
-    percentage: number;
-    status: string;
-  };
-  subjects: Array<{
-    subjectCode: string;
-    subjectName: string;
-    totalClasses: number;
-    attendedClasses: number;
-    percentage: number;
-    status: string;
-  }>;
-}
 
 const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, getRemainingTime }) => {
   const navigate = useNavigate();
@@ -91,10 +58,7 @@ const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, 
   const [notificationMessage, setNotificationMessage] = useState('');
   const [open, setOpen] = useState(window.innerWidth >= 768);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [results, setResults] = useState<Result[]>([]);
-  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [loadingResults, setLoadingResults] = useState(false);
-  const [loadingAttendance, setLoadingAttendance] = useState(false);
 
   useEffect(() => {
     // Route protection: ensure the regdNo matches the logged-in user
@@ -118,8 +82,6 @@ const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, 
       fetchPaymentHistory();
     } else if (activeTab === 'results') {
       fetchResults();
-    } else if (activeTab === 'attendance') {
-      fetchAttendance();
     }
   }, [activeTab, regdNo, user, navigate, location]);
 
@@ -185,217 +147,15 @@ const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, 
     setLoadingResults(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`http://localhost:5000/api/results/student/${user.id}`, {
+      await axios.get(`http://localhost:5000/api/results/student/${user.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setResults(response.data.results || []);
+      // Results fetched successfully but not stored in state anymore
     } catch (error) {
       console.error('Error fetching results:', error);
-      // Fallback to mock data if API fails
-      const mockResults = [
-        {
-          _id: '1',
-          semester: 1,
-          sgpa: '9.19',
-          totalCredits: 16,
-          earnedCredits: 16,
-          percentage: '89.5',
-          status: 'Pass',
-          subjects: [
-            { subjectName: 'Programming Fundamentals', grade: 'A', gradePoints: 9 },
-            { subjectName: 'Engineering Mathematics I', grade: 'B+', gradePoints: 8 },
-            { subjectName: 'Engineering Physics', grade: 'B', gradePoints: 7 },
-            { subjectName: 'Engineering Chemistry', grade: 'A', gradePoints: 9 }
-          ]
-        },
-        {
-          _id: '2',
-          semester: 2,
-          sgpa: '9.24',
-          totalCredits: 17,
-          earnedCredits: 17,
-          percentage: '91.2',
-          status: 'Pass',
-          subjects: [
-            { subjectName: 'Data Structures', grade: 'A+', gradePoints: 10 },
-            { subjectName: 'Engineering Mathematics II', grade: 'A', gradePoints: 9 },
-            { subjectName: 'Computer Organization', grade: 'B+', gradePoints: 8 },
-            { subjectName: 'Digital Electronics', grade: 'A', gradePoints: 9 }
-          ]
-        },
-        {
-          _id: '3',
-          semester: 3,
-          sgpa: '9.41',
-          totalCredits: 17,
-          earnedCredits: 17,
-          percentage: '93.8',
-          status: 'Pass',
-          subjects: [
-            { subjectName: 'Object Oriented Programming', grade: 'A+', gradePoints: 10 },
-            { subjectName: 'Database Management Systems', grade: 'A', gradePoints: 9 },
-            { subjectName: 'Computer Networks', grade: 'B+', gradePoints: 8 },
-            { subjectName: 'Operating Systems', grade: 'A+', gradePoints: 10 }
-          ]
-        }
-      ];
-      setResults(mockResults);
+      // No results to display
     } finally {
       setLoadingResults(false);
-    }
-  };
-
-  const fetchAttendance = async () => {
-    setLoadingAttendance(true);
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`http://localhost:5000/api/attendance/student/${user.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setAttendance(response.data.attendance || []);
-    } catch (error) {
-      console.error('Error fetching attendance:', error);
-      // Fallback to mock data if API fails
-      const mockAttendance = [
-        {
-          _id: '1',
-          semester: 1,
-          academicYear: '2024-25',
-          overallAttendance: {
-            totalClasses: 180,
-            attendedClasses: 167,
-            percentage: 92.78,
-            status: 'Excellent'
-          },
-          subjects: [
-            {
-              subjectCode: 'CS101',
-              subjectName: 'Programming Fundamentals',
-              totalClasses: 45,
-              attendedClasses: 42,
-              percentage: 93.33,
-              status: 'Excellent'
-            },
-            {
-              subjectCode: 'MA101',
-              subjectName: 'Engineering Mathematics I',
-              totalClasses: 40,
-              attendedClasses: 36,
-              percentage: 90.00,
-              status: 'Excellent'
-            },
-            {
-              subjectCode: 'PH101',
-              subjectName: 'Engineering Physics',
-              totalClasses: 35,
-              attendedClasses: 33,
-              percentage: 94.29,
-              status: 'Excellent'
-            },
-            {
-              subjectCode: 'CH101',
-              subjectName: 'Engineering Chemistry',
-              totalClasses: 35,
-              attendedClasses: 32,
-              percentage: 91.43,
-              status: 'Excellent'
-            }
-          ]
-        },
-        {
-          _id: '2',
-          semester: 2,
-          academicYear: '2024-25',
-          overallAttendance: {
-            totalClasses: 185,
-            attendedClasses: 172,
-            percentage: 92.97,
-            status: 'Excellent'
-          },
-          subjects: [
-            {
-              subjectCode: 'CS102',
-              subjectName: 'Data Structures',
-              totalClasses: 45,
-              attendedClasses: 43,
-              percentage: 95.56,
-              status: 'Excellent'
-            },
-            {
-              subjectCode: 'MA102',
-              subjectName: 'Engineering Mathematics II',
-              totalClasses: 40,
-              attendedClasses: 37,
-              percentage: 92.50,
-              status: 'Excellent'
-            },
-            {
-              subjectCode: 'CS103',
-              subjectName: 'Computer Organization',
-              totalClasses: 35,
-              attendedClasses: 31,
-              percentage: 88.57,
-              status: 'Good'
-            },
-            {
-              subjectCode: 'EC101',
-              subjectName: 'Digital Electronics',
-              totalClasses: 35,
-              attendedClasses: 33,
-              percentage: 94.29,
-              status: 'Excellent'
-            }
-          ]
-        },
-        {
-          _id: '3',
-          semester: 3,
-          academicYear: '2024-25',
-          overallAttendance: {
-            totalClasses: 175,
-            attendedClasses: 162,
-            percentage: 92.57,
-            status: 'Excellent'
-          },
-          subjects: [
-            {
-              subjectCode: 'CS201',
-              subjectName: 'Object Oriented Programming',
-              totalClasses: 40,
-              attendedClasses: 39,
-              percentage: 97.50,
-              status: 'Excellent'
-            },
-            {
-              subjectCode: 'CS202',
-              subjectName: 'Database Management Systems',
-              totalClasses: 40,
-              attendedClasses: 36,
-              percentage: 90.00,
-              status: 'Excellent'
-            },
-            {
-              subjectCode: 'CS203',
-              subjectName: 'Computer Networks',
-              totalClasses: 35,
-              attendedClasses: 31,
-              percentage: 88.57,
-              status: 'Good'
-            },
-            {
-              subjectCode: 'CS204',
-              subjectName: 'Operating Systems',
-              totalClasses: 30,
-              attendedClasses: 29,
-              percentage: 96.67,
-              status: 'Excellent'
-            }
-          ]
-        }
-      ];
-      setAttendance(mockAttendance);
-    } finally {
-      setLoadingAttendance(false);
     }
   };
 
@@ -652,18 +412,6 @@ const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, 
       ),
       active: activeTab === 'results'
     },
-    {
-      label: "Attendance",
-      href: "#",
-      onClick: () => {
-        setActiveTab('attendance');
-        fetchAttendance();
-      },
-      icon: (
-        <Calendar className="h-5 w-5 flex-shrink-0" />
-      ),
-      active: activeTab === 'attendance'
-    },
   ];
 
   if (loading) {
@@ -700,8 +448,7 @@ const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, 
 
   return (
     <div className={isDarkMode ? 'dark' : ''}>
-      <SidebarProvider>
-        <div className="flex h-screen w-full bg-gray-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 overflow-hidden">
+      <div className="flex h-screen w-full bg-gray-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 overflow-hidden">
           {/* Mobile backdrop */}
           {open && (
             <div 
@@ -710,96 +457,144 @@ const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, 
             />
           )}
           
-          <Sidebar open={open} setOpen={setOpen}>
-            <SidebarBody className="justify-between gap-10">
-              <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
-                <div className="p-3">
-                  {open ? <StudentLogo /> : <StudentLogoIcon />}
+          {/* Custom Modern Sidebar */}
+          <motion.div
+            initial={false}
+            animate={{ width: open ? 280 : 80 }}
+            transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+            className="fixed left-0 top-0 h-full bg-white/80 dark:bg-neutral-900/80 backdrop-blur-xl border-r border-neutral-200/50 dark:border-neutral-700/50 z-50 flex flex-col shadow-2xl"
+          >
+            {/* Toggle Button */}
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setOpen(!open)}
+              className="absolute -right-3 top-8 h-6 w-6 rounded-full bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 flex items-center justify-center shadow-lg hover:shadow-xl transition-all z-10"
+            >
+              {open ? (
+                <ChevronLeft className="h-3 w-3 text-neutral-600 dark:text-neutral-400" />
+              ) : (
+                <ChevronRight className="h-3 w-3 text-neutral-600 dark:text-neutral-400" />
+              )}
+            </motion.button>
+
+            {/* Header with Logo */}
+            <div className="p-4 border-b border-neutral-200/50 dark:border-neutral-700/50">
+              <motion.div
+                initial={false}
+                animate={{ opacity: open ? 1 : 0 }}
+                transition={{ duration: 0.2 }}
+                className="flex items-center space-x-3"
+              >
+                <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                  <GraduationCap className="h-5 w-5 text-white" />
                 </div>
-                <div className={`mt-8 flex flex-col gap-2 ${open ? 'px-3' : 'px-1'}`}>
-                  {links.map((link, idx) => (
-                    <motion.button
-                      key={idx}
-                      onClick={() => {
-                        link.onClick();
-                        // Close sidebar on mobile after navigation
-                        if (window.innerWidth < 768) {
-                          setOpen(false);
-                        }
-                      }}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className={`flex items-center ${open ? 'justify-start space-x-4 px-4' : 'justify-center px-3'} py-3 rounded-lg transition-all duration-200 text-left w-full ${
-                        link.active 
-                          ? 'bg-blue-500 text-white shadow-lg' 
-                          : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700'
-                      }`}
-                      style={{ 
-                        color: link.active ? 'white' : undefined 
-                      }}
-                      title={!open ? link.label : undefined}
-                    >
-                      <span className="flex-shrink-0 text-current">
-                        {link.icon}
-                      </span>
-                      {open && (
-                        <motion.span
-                          initial={{ opacity: 0, width: 0 }}
-                          animate={{ opacity: 1, width: "auto" }}
-                          exit={{ opacity: 0, width: 0 }}
-                          className="font-medium whitespace-nowrap"
-                        >
-                          {link.label}
-                        </motion.span>
-                      )}
-                    </motion.button>
-                  ))}
-                </div>
-              </div>
-              
-              <div className={`space-y-3 ${open ? 'p-3' : 'p-1'}`}>
-                {/* User Profile */}
-                <div className={`flex items-center ${open ? 'space-x-4 px-4' : 'justify-center px-3'} py-3 rounded-lg bg-neutral-100 dark:bg-neutral-700`}>
-                  <div className="h-9 w-9 flex-shrink-0 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
-                    <User className="h-5 w-5 text-white" />
-                  </div>
-                  {open && (
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100 truncate">
-                        {dashboardData?.student?.firstName || "Student"}
-                      </p>
-                      <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate">
-                        {dashboardData?.student?.email}
-                      </p>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Logout Button */}
+                {open && (
+                  <motion.div
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.1 }}
+                  >
+                    <h2 className="text-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                      EduCMS
+                    </h2>
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400">Student Portal</p>
+                  </motion.div>
+                )}
+              </motion.div>
+            </div>
+
+            {/* Navigation Links */}
+            <div className="flex-1 p-4 space-y-2 overflow-y-auto">
+              {links.map((link, idx) => (
                 <motion.button
-                  onClick={onLogout}
-                  whileHover={{ scale: 1.02 }}
+                  key={idx}
+                  onClick={() => {
+                    link.onClick();
+                    if (window.innerWidth < 768) {
+                      setOpen(false);
+                    }
+                  }}
+                  whileHover={{ scale: 1.02, x: 2 }}
                   whileTap={{ scale: 0.98 }}
-                  className={`flex items-center ${open ? 'space-x-4 px-4' : 'justify-center px-3'} py-3 rounded-lg transition-all duration-200 text-left w-full text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20`}
-                  title={!open ? "Logout" : undefined}
+                  className={`w-full flex items-center space-x-3 px-3 py-3 rounded-xl transition-all duration-200 group ${
+                    link.active 
+                      ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg' 
+                      : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800/50'
+                  }`}
+                  title={!open ? link.label : undefined}
                 >
-                  <LogOut className="h-5 w-5 flex-shrink-0" />
+                  <span className={`flex-shrink-0 transition-transform duration-200 ${link.active ? '' : 'group-hover:scale-110'}`}>
+                    {link.icon}
+                  </span>
                   {open && (
                     <motion.span
-                      initial={{ opacity: 0, width: 0 }}
-                      animate={{ opacity: 1, width: "auto" }}
-                      exit={{ opacity: 0, width: 0 }}
-                      className="font-medium whitespace-nowrap"
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.05 }}
+                      className="font-medium"
                     >
-                      Logout
+                      {link.label}
                     </motion.span>
                   )}
                 </motion.button>
-              </div>
-            </SidebarBody>
-          </Sidebar>
-          
-          {/* Main Content */}
+              ))}
+            </div>
+            
+            {/* User Profile Section */}
+            <div className="p-4 border-t border-neutral-200/50 dark:border-neutral-700/50 space-y-3">
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                className={`flex items-center space-x-3 p-3 rounded-xl bg-gradient-to-r from-neutral-100 to-neutral-50 dark:from-neutral-800/50 dark:to-neutral-700/50 ${
+                  open ? '' : 'justify-center'
+                }`}
+              >
+                <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                  <User className="h-5 w-5 text-white" />
+                </div>
+                {open && (
+                  <motion.div
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className="flex-1 min-w-0"
+                  >
+                    <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 truncate">
+                      {dashboardData?.student?.firstName || "Student"}
+                    </p>
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate">
+                      {dashboardData?.student?.email}
+                    </p>
+                  </motion.div>
+                )}
+              </motion.div>
+              
+              {/* Logout Button */}
+              <motion.button
+                onClick={onLogout}
+                whileHover={{ scale: 1.02, x: 2 }}
+                whileTap={{ scale: 0.98 }}
+                className={`w-full flex items-center space-x-3 px-3 py-3 rounded-xl transition-all duration-200 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 group ${
+                  open ? '' : 'justify-center'
+                }`}
+                title={!open ? "Logout" : undefined}
+              >
+                <LogOut className="h-5 w-5 flex-shrink-0 group-hover:scale-110 transition-transform duration-200" />
+                {open && (
+                  <motion.span
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="font-medium"
+                  >
+                    Logout
+                  </motion.span>
+                )}
+              </motion.button>
+            </div>
+          </motion.div>
+        
+        {/* Main Content with proper margin */}
+        <div className={`transition-all duration-300 ${open ? 'ml-[280px]' : 'ml-[80px]'} flex-1 min-h-screen`}>
           <StudentDashboardContent 
             onLogout={onLogout} 
             getRemainingTime={getRemainingTime}
@@ -811,7 +606,6 @@ const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, 
             setActiveTab={setActiveTab}
             fetchPaymentHistory={fetchPaymentHistory}
             fetchResults={fetchResults}
-            fetchAttendance={fetchAttendance}
             handlePayment={handlePayment}
             handleRetryPayment={handleRetryPayment}
             handlePrintReceipt={handlePrintReceipt}
@@ -828,13 +622,10 @@ const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, 
             notificationMessage={notificationMessage}
             user={user}
             currentTime={currentTime}
-            results={results}
-            attendance={attendance}
             loadingResults={loadingResults}
-            loadingAttendance={loadingAttendance}
           />
         </div>
-      </SidebarProvider>
+      </div>
     </div>
   );
 };
@@ -886,7 +677,6 @@ const StudentDashboardContent = ({
   setActiveTab,
   fetchPaymentHistory,
   fetchResults,
-  fetchAttendance,
   handlePayment,
   handleRetryPayment,
   handlePrintReceipt,
@@ -903,10 +693,7 @@ const StudentDashboardContent = ({
   notificationMessage,
   user,
   currentTime,
-  results,
-  attendance,
-  loadingResults,
-  loadingAttendance
+  loadingResults
 }: any) => {
   const { student, financials } = dashboardData || {};
 
@@ -1013,8 +800,7 @@ const StudentDashboardContent = ({
               { id: 'profile', label: 'Profile', icon: User },
               { id: 'payments', label: 'Payments', icon: CreditCard },
               { id: 'receipts', label: 'Receipts', icon: Receipt },
-              { id: 'results', label: 'Results', icon: BookOpen },
-              { id: 'attendance', label: 'Attendance', icon: Calendar }
+              { id: 'results', label: 'Results', icon: BookOpen }
             ].map((tab) => {
               const Icon = tab.icon;
               return (
@@ -1028,8 +814,6 @@ const StudentDashboardContent = ({
                       fetchPaymentHistory();
                     } else if (tab.id === 'results') {
                       fetchResults();
-                    } else if (tab.id === 'attendance') {
-                      fetchAttendance();
                     }
                   }}
                   className={`group py-4 px-1 border-b-2 font-medium text-sm transition-all flex items-center space-x-2 ${
@@ -1601,285 +1385,57 @@ const StudentDashboardContent = ({
               <div className="flex justify-center items-center py-12">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
               </div>
-            ) : results.length === 0 ? (
-              <div className="text-center py-12">
-                <BookOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500 dark:text-gray-400 text-lg font-medium">No results available</p>
-                <p className="text-gray-400 dark:text-gray-500 text-sm mt-2">Your academic results will appear here once published</p>
-              </div>
             ) : (
-              <div className="space-y-6">
-                {/* Semester Results */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {results.map((result: Result, index: number) => (
-                    <motion.div
-                      key={result._id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      className="p-4 rounded-xl bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/30 dark:to-blue-900/30 border border-green-200 dark:border-green-700/50 hover:shadow-lg transition-all cursor-pointer"
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="font-semibold text-gray-900 dark:text-white">
-                          Semester {result.semester}
-                        </h3>
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          result.status === 'Pass' 
-                            ? 'bg-green-100 dark:bg-green-500/20 text-green-800 dark:text-green-400'
-                            : 'bg-red-100 dark:bg-red-500/20 text-red-800 dark:text-red-400'
-                        }`}>
-                          {result.status}
-                        </span>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">SGPA:</span>
-                          <span className="font-bold text-green-600 dark:text-green-400">{result.sgpa}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">Credits:</span>
-                          <span className="font-bold text-gray-900 dark:text-white">{result.totalCredits}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">Percentage:</span>
-                          <span className="font-bold text-blue-600 dark:text-blue-400">{result.percentage}%</span>
-                        </div>
-                      </div>
-                      <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        className="w-full mt-3 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                      >
-                        View Details
-                      </motion.button>
-                    </motion.div>
-                  ))}
+              <div className="text-center py-12 space-y-6">
+                <div className="mx-auto w-24 h-24 bg-gradient-to-r from-green-100 to-blue-100 dark:from-green-900/30 dark:to-blue-900/30 rounded-full flex items-center justify-center">
+                  <BookOpen className="w-12 h-12 text-green-600 dark:text-green-400" />
                 </div>
                 
-                {/* Overall Performance */}
-                {results.length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="p-6 rounded-xl bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/30 dark:to-purple-900/30 border border-blue-200 dark:border-blue-700/50">
-                      <div className="flex items-center space-x-3 mb-3">
-                        <div className="p-2 bg-blue-100 dark:bg-blue-500/20 rounded-lg">
-                          <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                        </div>
-                        <h3 className="font-semibold text-gray-900 dark:text-white">Overall CGPA</h3>
-                      </div>
-                      <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                        {((results.reduce((sum: number, r: Result) => sum + (parseFloat(r.sgpa) * r.earnedCredits), 0)) /
-                          results.reduce((sum: number, r: Result) => sum + r.earnedCredits, 0)).toFixed(2)}
-                      </p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        {results.reduce((sum: number, r: Result) => sum + (parseFloat(r.sgpa) * r.earnedCredits), 0) / 
-                         results.reduce((sum: number, r: Result) => sum + r.earnedCredits, 0) >= 8.5 ? 'Excellent' : 
-                         results.reduce((sum: number, r: Result) => sum + (parseFloat(r.sgpa) * r.earnedCredits), 0) / 
-                         results.reduce((sum: number, r: Result) => sum + r.earnedCredits, 0) >= 7.0 ? 'Good' : 'Average'} Performance
-                      </p>
-                    </div>
-                    
-                    <div className="p-6 rounded-xl bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 border border-green-200 dark:border-green-700/50">
-                      <div className="flex items-center space-x-3 mb-3">
-                        <div className="p-2 bg-green-100 dark:bg-green-500/20 rounded-lg">
-                          <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
-                        </div>
-                        <h3 className="font-semibold text-gray-900 dark:text-white">Total Credits</h3>
-                      </div>
-                      <p className="text-3xl font-bold text-green-600 dark:text-green-400">
-                        {results.reduce((sum: number, r: Result) => sum + r.earnedCredits, 0)}
-                      </p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Credits Earned</p>
-                    </div>
-                    
-                    <div className="p-6 rounded-xl bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 border border-purple-200 dark:border-purple-700/50">
-                      <div className="flex items-center space-x-3 mb-3">
-                        <div className="p-2 bg-purple-100 dark:bg-purple-500/20 rounded-lg">
-                          <GraduationCap className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                        </div>
-                        <h3 className="font-semibold text-gray-900 dark:text-white">Semesters</h3>
-                      </div>
-                      <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">{results.length}</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        {results.filter((r: Result) => r.status === 'Pass').length} Passed
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                    View Your Academic Results
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
+                    Access your complete academic results, semester-wise performance, and detailed grade reports on our dedicated results portal.
+                  </p>
+                </div>
 
-        {activeTab === 'attendance' && (
-          <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center space-x-2">
-              <Calendar className="w-6 h-6 text-purple-600" />
-              <span>Attendance Record</span>
-            </h2>
-            
-            {loadingAttendance ? (
-              <div className="flex justify-center items-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
-              </div>
-            ) : attendance.length === 0 ? (
-              <div className="text-center py-12">
-                <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500 dark:text-gray-400 text-lg font-medium">No attendance records available</p>
-                <p className="text-gray-400 dark:text-gray-500 text-sm mt-2">Your attendance records will appear here</p>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {/* Current Semester Overall Attendance */}
-                {attendance.length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="p-4 rounded-xl bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 border border-green-200 dark:border-green-700/50">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
-                        <h3 className="font-semibold text-gray-900 dark:text-white">Overall</h3>
-                      </div>
-                      <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                        {attendance[attendance.length - 1]?.overallAttendance?.percentage || 0}%
-                      </p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {attendance[attendance.length - 1]?.overallAttendance?.status || 'N/A'}
-                      </p>
-                    </div>
-                    
-                    <div className="p-4 rounded-xl bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30 border border-blue-200 dark:border-blue-700/50">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <Clock className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                        <h3 className="font-semibold text-gray-900 dark:text-white">Present</h3>
-                      </div>
-                      <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                        {attendance[attendance.length - 1]?.overallAttendance?.attendedClasses || 0}
-                      </p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Classes</p>
-                    </div>
-                    
-                    <div className="p-4 rounded-xl bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/30 dark:to-orange-900/30 border border-yellow-200 dark:border-yellow-700/50">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
-                        <h3 className="font-semibold text-gray-900 dark:text-white">Absent</h3>
-                      </div>
-                      <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-                        {(attendance[attendance.length - 1]?.overallAttendance?.totalClasses || 0) - 
-                         (attendance[attendance.length - 1]?.overallAttendance?.attendedClasses || 0)}
-                      </p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Classes</p>
-                    </div>
-                    
-                    <div className="p-4 rounded-xl bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 border border-purple-200 dark:border-purple-700/50">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <Calendar className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                        <h3 className="font-semibold text-gray-900 dark:text-white">Total</h3>
-                      </div>
-                      <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                        {attendance[attendance.length - 1]?.overallAttendance?.totalClasses || 0}
-                      </p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Classes</p>
-                    </div>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => window.open('https://gyanranjanpriyam.netlify.app', '_blank')}
+                  className="inline-flex items-center space-x-3 px-8 py-4 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
+                >
+                  <BookOpen className="w-5 h-5" />
+                  <span>View Your Results</span>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </motion.button>
+
+                {/* Help Section */}
+                <div className="mt-8 p-6 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-700/50">
+                  <div className="flex items-center justify-center space-x-2 mb-3">
+                    <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <h4 className="font-semibold text-blue-900 dark:text-blue-100">Need Help?</h4>
                   </div>
-                )}
-                
-                {/* Subject-wise Attendance */}
-                {attendance.length > 0 && attendance[attendance.length - 1]?.subjects && (
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Subject-wise Attendance</h3>
-                    <div className="space-y-3">
-                      {attendance[attendance.length - 1].subjects.map((subject: AttendanceRecord['subjects'][0], index: number) => (
-                        <motion.div
-                          key={index}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.1 }}
-                          className="p-4 rounded-xl bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600"
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <h4 className="font-medium text-gray-900 dark:text-white">{subject.subjectName}</h4>
-                            <span className={`px-3 py-1 text-sm font-medium rounded-full ${
-                              subject.status === 'Excellent' 
-                                ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
-                                : subject.status === 'Good'
-                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
-                                : subject.status === 'Average'
-                                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400'
-                                : subject.status === 'Poor'
-                                ? 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400'
-                                : 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400'
-                            }`}>
-                              {subject.percentage}%
-                            </span>
-                          </div>
-                          <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400 mb-2">
-                            <span>Present: {subject.attendedClasses}</span>
-                            <span>Total: {subject.totalClasses}</span>
-                            <span>Absent: {subject.totalClasses - subject.attendedClasses}</span>
-                          </div>
-                          <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                            <motion.div
-                              initial={{ width: 0 }}
-                              animate={{ width: `${subject.percentage}%` }}
-                              transition={{ delay: index * 0.1 + 0.3, duration: 0.5 }}
-                              className={`h-2 rounded-full ${
-                                subject.status === 'Excellent' ? 'bg-green-500' :
-                                subject.status === 'Good' ? 'bg-blue-500' :
-                                subject.status === 'Average' ? 'bg-yellow-500' :
-                                subject.status === 'Poor' ? 'bg-orange-500' : 'bg-red-500'
-                              }`}
-                            />
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
+                  <p className="text-blue-800 dark:text-blue-200 text-sm mb-3">
+                    If you're having trouble accessing your results or need assistance with your academic records, please contact our examination department.
+                  </p>
+                  <div className="flex items-center justify-center space-x-2 text-blue-700 dark:text-blue-300">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    <a 
+                      href="mailto:contact.exam@gyanranjanpriyam.netlify.app" 
+                      className="text-sm font-medium hover:underline"
+                    >
+                      contact.exam@gyanranjanpriyam.netlify.app
+                    </a>
                   </div>
-                )}
-                
-                {/* Semester-wise Summary */}
-                {attendance.length > 1 && (
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Semester-wise Summary</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {attendance.map((record: AttendanceRecord, index: number) => (
-                        <motion.div
-                          key={record._id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.1 }}
-                          className="p-4 rounded-xl bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/30 dark:to-blue-900/30 border border-purple-200 dark:border-purple-700/50"
-                        >
-                          <div className="flex items-center justify-between mb-3">
-                            <h4 className="font-semibold text-gray-900 dark:text-white">
-                              Semester {record.semester}
-                            </h4>
-                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                              record.overallAttendance.status === 'Excellent' 
-                                ? 'bg-green-100 dark:bg-green-500/20 text-green-800 dark:text-green-400'
-                                : record.overallAttendance.status === 'Good'
-                                ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-800 dark:text-blue-400'
-                                : 'bg-yellow-100 dark:bg-yellow-500/20 text-yellow-800 dark:text-yellow-400'
-                            }`}>
-                              {record.overallAttendance.status}
-                            </span>
-                          </div>
-                          <div className="space-y-2">
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-600 dark:text-gray-400">Percentage:</span>
-                              <span className="font-bold text-purple-600 dark:text-purple-400">
-                                {record.overallAttendance.percentage}%
-                              </span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-600 dark:text-gray-400">Classes:</span>
-                              <span className="font-bold text-gray-900 dark:text-white">
-                                {record.overallAttendance.attendedClasses}/{record.overallAttendance.totalClasses}
-                              </span>
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                </div>
               </div>
             )}
           </div>

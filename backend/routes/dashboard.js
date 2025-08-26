@@ -3,7 +3,6 @@ const Student = require('../models/Student');
 const Payment = require('../models/Payment');
 const Branch = require('../models/Branch');
 const User = require('../models/User');
-const Faculty = require('../models/Faculty');
 const { auth, authorize } = require('../middleware/auth');
 
 const router = express.Router();
@@ -487,66 +486,35 @@ router.get('/student', auth, async (req, res) => {
   }
 });
 
-// Admin Dashboard (with faculty management)
+// Admin Dashboard (simplified without faculty)
 router.get('/admin', auth, authorize(['head_admin', 'admin']), async (req, res) => {
   try {
     // Student statistics
     const totalStudents = await Student.countDocuments({ isActive: true });
     const activeStudents = await Student.countDocuments({ isActive: true });
 
-    // Faculty statistics
-    const totalFaculty = await Faculty.countDocuments();
-    const activeFaculty = await Faculty.countDocuments({ status: 'active' });
-    const inactiveFaculty = await Faculty.countDocuments({ status: 'inactive' });
-    const onLeaveFaculty = await Faculty.countDocuments({ status: 'on-leave' });
+    // Branch statistics
+    const totalBranches = await Branch.countDocuments({ isActive: true });
     
-    // Faculty by department
-    const facultyByDepartment = await Faculty.aggregate([
-      {
-        $group: {
-          _id: '$department',
-          count: { $sum: 1 }
-        }
-      },
-      { $sort: { count: -1 } }
-    ]);
-
-    // Faculty by designation
-    const facultyByDesignation = await Faculty.aggregate([
-      {
-        $group: {
-          _id: '$designation',
-          count: { $sum: 1 }
-        }
-      },
-      { $sort: { count: -1 } }
-    ]);
-
-    // Recent faculty (last 30 days)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const recentFaculty = await Faculty.countDocuments({
-      createdAt: { $gte: thirtyDaysAgo }
-    });
-
     // Payment statistics
     const totalPayments = await Payment.countDocuments();
     const completedPayments = await Payment.countDocuments({ status: 'completed' });
     const pendingPayments = await Payment.countDocuments({ status: 'pending' });
+    
+    // Revenue calculation
+    const totalRevenue = await Payment.aggregate([
+      { $match: { status: 'completed' } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]);
 
     const dashboard = {
+      totalStudents: totalStudents,
+      totalBranches: totalBranches,
+      totalRevenue: totalRevenue.length > 0 ? totalRevenue[0].total : 0,
+      pendingPayments: pendingPayments,
       students: {
         total: totalStudents,
         active: activeStudents
-      },
-      faculty: {
-        total: totalFaculty,
-        active: activeFaculty,
-        inactive: inactiveFaculty,
-        onLeave: onLeaveFaculty,
-        recent: recentFaculty,
-        departments: facultyByDepartment,
-        designations: facultyByDesignation
       },
       payments: {
         total: totalPayments,

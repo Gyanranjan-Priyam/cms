@@ -7,13 +7,26 @@ const { auth } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Admin login
+// Admin login - supports both username and email
 router.post('/admin/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     
-    const user = await User.findOne({ username });
-    if (!user || !(await user.comparePassword(password))) {
+    // Find user by username or email
+    const user = await User.findOne({ 
+      $or: [
+        { username: username },
+        { email: username }  // Allow email as username
+      ]
+    });
+    
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid credentials' });
+    }
+
+    // Check password
+    const isValidPassword = await user.comparePassword(password);
+    if (!isValidPassword) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
@@ -35,10 +48,11 @@ router.post('/admin/login', async (req, res) => {
         username: user.username,
         role: user.role,
         email: user.email,
-        name: user.username
+        name: user.name || user.username
       }
     });
   } catch (error) {
+    console.error('Admin login error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

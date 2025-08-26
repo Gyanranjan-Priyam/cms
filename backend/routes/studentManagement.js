@@ -356,6 +356,99 @@ router.delete('/students/:id', auth, studentManagementAuth, async (req, res) => 
   }
 });
 
+// Permanently delete student (hard delete)
+router.delete('/students/:id/permanent', auth, studentManagementAuth, async (req, res) => {
+  try {
+    const studentId = req.params.id;
+
+    // Check if student exists
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      });
+    }
+
+    // Store student info for logging
+    const studentInfo = {
+      regdNo: student.regdNo,
+      name: `${student.firstName} ${student.lastName}`,
+      email: student.email
+    };
+
+    // Permanently delete from database
+    await Student.findByIdAndDelete(studentId);
+
+    console.log(`Student permanently deleted: ${studentInfo.name} (${studentInfo.regdNo}) by admin ${req.user.id}`);
+
+    res.json({
+      success: true,
+      message: `Student ${studentInfo.name} (${studentInfo.regdNo}) has been permanently deleted from the database`,
+      deletedStudent: studentInfo
+    });
+  } catch (error) {
+    console.error('Error permanently deleting student:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error while permanently deleting student' 
+    });
+  }
+});
+
+// Bulk permanent delete
+router.post('/students/bulk-permanent-delete', auth, studentManagementAuth, async (req, res) => {
+  try {
+    const { studentIds } = req.body;
+
+    if (!Array.isArray(studentIds) || studentIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No student IDs provided'
+      });
+    }
+
+    // Get student info before deletion for logging
+    const studentsToDelete = await Student.find({
+      _id: { $in: studentIds }
+    }).select('regdNo firstName lastName email');
+
+    if (studentsToDelete.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No students found with provided IDs'
+      });
+    }
+
+    // Permanently delete all students
+    const deleteResult = await Student.deleteMany({
+      _id: { $in: studentIds }
+    });
+
+    const deletedStudentInfo = studentsToDelete.map(student => ({
+      regdNo: student.regdNo,
+      name: `${student.firstName} ${student.lastName}`,
+      email: student.email
+    }));
+
+    console.log(`Bulk permanent delete: ${deleteResult.deletedCount} students permanently deleted by admin ${req.user.id}`);
+    console.log('Deleted students:', deletedStudentInfo);
+
+    res.json({
+      success: true,
+      message: `${deleteResult.deletedCount} students have been permanently deleted from the database`,
+      deletedCount: deleteResult.deletedCount,
+      deletedStudents: deletedStudentInfo
+    });
+  } catch (error) {
+    console.error('Error in bulk permanent delete:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error while permanently deleting students' 
+    });
+  }
+});
+
 // Bulk operations
 router.post('/students/bulk-upload', auth, studentManagementAuth, async (req, res) => {
   try {

@@ -10,16 +10,18 @@ const paymentSchema = new mongoose.Schema({
   },
   paymentMethod: { 
     type: String, 
-    enum: ['online', 'cash', 'cheque', 'custom_upi', 'custom_qr'],
+    enum: ['online', 'cash', 'cheque', 'custom_upi', 'custom_qr', 'razorpay'],
     default: 'online'
   },
   transactionId: { type: String, unique: true, sparse: true },
-  cashfreeOrderId: { type: String },
-  cashfreePaymentId: { type: String },
-  cashfreeOrderToken: { type: String },
+
+  // Razorpay fields
+  razorpayOrderId: { type: String },
+  razorpayPaymentId: { type: String },
+  razorpaySignature: { type: String },
   status: { 
     type: String, 
-    enum: ['pending', 'completed', 'failed', 'rejected'],
+    enum: ['pending', 'completed', 'failed', 'rejected', 'cancelled'],
     default: 'pending'
   },
   paymentDate: { type: Date, default: Date.now },

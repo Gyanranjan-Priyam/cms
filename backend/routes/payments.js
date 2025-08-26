@@ -3,12 +3,19 @@ const axios = require('axios');
 const crypto = require('crypto');
 const XLSX = require('xlsx');
 const mongoose = require('mongoose');
+const Razorpay = require('razorpay');
 const Payment = require('../models/Payment');
 const Student = require('../models/Student');
 const Notification = require('../models/Notification');
 const { auth, authorize } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Initialize Razorpay
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
+});
 
 // Custom payment submission endpoint
 router.post('/custom-payment', auth, async (req, res) => {
@@ -875,6 +882,215 @@ router.get('/history', auth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error',
+      error: error.message
+    });
+  }
+});
+
+// Get payment history for a specific student
+router.get('/student/:studentId', auth, async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+
+    // Check if user is accessing their own data or is an admin/finance
+    if (req.user.id !== studentId && !['admin', 'finance_department', 'finance_officer', 'head_admin'].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    const payments = await Payment.find({ student: studentId })
+      .populate('student', 'firstName lastName regdNo email')
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .skip((parseInt(page) - 1) * parseInt(limit));
+
+    const total = await Payment.countDocuments({ student: studentId });
+
+    res.json({
+      success: true,
+      payments,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(total / parseInt(limit)),
+        totalRecords: total,
+        limit: parseInt(limit)
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching student payment history:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+});
+
+// Razorpay - Create Order
+router.post('/create-razorpay-order', auth, async (req, res) => {
+  try {
+    const { amount, paymentType, studentId } = req.body;
+    const userId = req.user.id;
+
+    // Validate required fields
+    if (!amount || !paymentType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Amount and payment type are required'
+      });
+    }
+
+    // Get student details
+    const student = await Student.findById(studentId || userId);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      });
+    }
+
+    // Create order options
+    const options = {
+      amount: Math.round(amount), // Amount in paise (already multiplied by 100 in frontend)
+      currency: 'INR',
+      receipt: `rcpt_${Date.now()}_${student.regdNo}`,
+      notes: {
+        student_id: student._id.toString(),
+        student_regdno: student.regdNo,
+        payment_type: paymentType,
+        student_name: `${student.firstName} ${student.lastName}`
+      }
+    };
+
+    // Create Razorpay order
+    const order = await razorpay.orders.create(options);
+
+    // Save order details in database (optional)
+    const payment = new Payment({
+      student: student._id,
+      amount: amount / 100, // Store actual amount (convert back from paise)
+      paymentType,
+      paymentMethod: 'razorpay',
+      razorpayOrderId: order.id,
+      status: 'pending',
+      receiptNumber: order.receipt,
+      submittedDate: new Date()
+    });
+
+    await payment.save();
+
+    res.json({
+      success: true,
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      receipt: order.receipt
+    });
+
+  } catch (error) {
+    console.error('Error creating Razorpay order:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create payment order',
+      error: error.message
+    });
+  }
+});
+
+// Razorpay - Verify Payment
+router.post('/verify-razorpay-payment', auth, async (req, res) => {
+  try {
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      paymentType,
+      amount
+    } = req.body;
+
+    // Validate required fields
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing payment verification data'
+      });
+    }
+
+    // Verify signature
+    const body = razorpay_order_id + '|' + razorpay_payment_id;
+    const expectedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || 'dkl6KQPqKiZj9UZbF8mPER8L')
+      .update(body.toString())
+      .digest('hex');
+
+    if (expectedSignature !== razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment verification failed - Invalid signature'
+      });
+    }
+
+    // Find and update payment record
+    const payment = await Payment.findOne({ razorpayOrderId: razorpay_order_id }).populate('student');
+    
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Payment record not found'
+      });
+    }
+
+    // Update payment status
+    payment.status = 'completed';
+    payment.razorpayPaymentId = razorpay_payment_id;
+    payment.razorpaySignature = razorpay_signature;
+    payment.paidDate = new Date();
+    payment.transactionId = razorpay_payment_id; // Use Razorpay payment ID as transaction ID
+    
+    // Generate receipt number if not exists
+    if (!payment.receiptNumber) {
+      payment.receiptNumber = `RCP${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    }
+
+    await payment.save();
+
+    // Create success notification
+    const notification = new Notification({
+      student: payment.student._id,
+      type: 'payment_update',
+      title: 'Payment Successful',
+      message: `Your payment of ₹${payment.amount} for ${payment.paymentType} has been completed successfully via Razorpay.`,
+      paymentId: payment._id,
+      amount: payment.amount,
+      paymentType: payment.paymentType,
+      receiptNumber: payment.receiptNumber
+    });
+
+    await notification.save();
+
+    res.json({
+      success: true,
+      message: 'Payment verified and completed successfully',
+      payment: {
+        id: payment._id,
+        status: payment.status,
+        receiptNumber: payment.receiptNumber,
+        transactionId: payment.transactionId,
+        amount: payment.amount,
+        paymentType: payment.paymentType,
+        paidDate: payment.paidDate
+      }
+    });
+
+  } catch (error) {
+    console.error('Error verifying Razorpay payment:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Payment verification failed',
       error: error.message
     });
   }

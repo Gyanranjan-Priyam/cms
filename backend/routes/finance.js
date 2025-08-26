@@ -2,6 +2,7 @@ const express = require('express');
 const Payment = require('../models/Payment');
 const Student = require('../models/Student');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 const { auth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -22,20 +23,414 @@ const financeAuth = async (req, res, next) => {
 };
 
 // ===================
-// PAYMENT MANAGEMENT
+// FINANCE DASHBOARD ENDPOINTS
 // ===================
 
-// Get all payments with filtering and pagination
+// Get all students for finance management
+router.get('/students', auth, financeAuth, async (req, res) => {
+  try {
+    const students = await Student.find({ isActive: true })
+      .populate('branch', 'name code')
+      .populate('department', 'name code')
+      .sort({ firstName: 1, lastName: 1 })
+      .select('firstName lastName regdNo email phone branch department semester academicYear status');
+
+    res.json({
+      success: true,
+      students
+    });
+  } catch (error) {
+    console.error('Error fetching students:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch students'
+    });
+  }
+});
+
+// Get all transactions with student details
+router.get('/transactions', auth, financeAuth, async (req, res) => {
+  try {
+    const transactions = await Payment.find({ student: { $ne: null } })
+      .populate({
+        path: 'student',
+        select: 'firstName lastName regdNo email phone',
+        populate: [
+          { path: 'branch', select: 'name code' },
+          { path: 'department', select: 'name code' }
+        ]
+      })
+      .sort({ submittedDate: -1 })
+      .lean();
+
+    // Filter out any transactions where student population failed
+    const validTransactions = transactions.filter(transaction => 
+      transaction.student && transaction.student._id
+    );
+
+    res.json({
+      success: true,
+      transactions: validTransactions
+    });
+  } catch (error) {
+    console.error('Error fetching transactions:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch transactions'
+    });
+  }
+});
+
+// Get payment statistics for dashboard
+router.get('/stats', auth, financeAuth, async (req, res) => {
+  try {
+    const currentDate = new Date();
+    const currentMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    const previousMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+    const currentMonthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+
+    // Get total revenue (completed payments)
+    const totalRevenueResult = await Payment.aggregate([
+      { $match: { status: 'completed' } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]);
+    const totalRevenue = totalRevenueResult[0]?.total || 0;
+
+    // Get total transactions count
+    const totalTransactions = await Payment.countDocuments();
+
+    // Get completed transactions count
+    const completedTransactions = await Payment.countDocuments({ status: 'completed' });
+
+    // Get pending amount
+    const pendingAmountResult = await Payment.aggregate([
+      { $match: { status: 'pending' } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]);
+    const pendingAmount = pendingAmountResult[0]?.total || 0;
+
+    // Get current month revenue
+    const currentMonthRevenueResult = await Payment.aggregate([
+      {
+        $match: {
+          status: 'completed',
+          paidDate: { $gte: currentMonth, $lte: currentMonthEnd }
+        }
+      },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]);
+    const monthlyRevenue = currentMonthRevenueResult[0]?.total || 0;
+
+    // Get previous month revenue for growth calculation
+    const previousMonthRevenueResult = await Payment.aggregate([
+      {
+        $match: {
+          status: 'completed',
+          paidDate: { $gte: previousMonth, $lt: currentMonth }
+        }
+      },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]);
+    const previousMonthRevenue = previousMonthRevenueResult[0]?.total || 0;
+
+    // Calculate revenue growth percentage
+    const revenueGrowth = previousMonthRevenue > 0 
+      ? ((monthlyRevenue - previousMonthRevenue) / previousMonthRevenue * 100).toFixed(1)
+      : 0;
+
+    const stats = {
+      totalRevenue,
+      totalTransactions,
+      pendingAmount,
+      completedTransactions,
+      monthlyRevenue,
+      revenueGrowth: parseFloat(revenueGrowth)
+    };
+
+    res.json({
+      success: true,
+      stats
+    });
+  } catch (error) {
+    console.error('Error fetching stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch statistics'
+    });
+  }
+});
+
+// Add new payment for individual student, branch, or all students
+router.post('/add-payment', auth, financeAuth, async (req, res) => {
+  try {
+    const { targetType, studentId, branchId, amount, paymentType, dueDate, description } = req.body;
+
+    // Validate required fields
+    if (!targetType || !amount || !paymentType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Target type, amount, and payment type are required'
+      });
+    }
+
+    const validatedAmount = parseFloat(amount);
+    if (isNaN(validatedAmount) || validatedAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid amount'
+      });
+    }
+
+    let targetStudents = [];
+
+    // Get target students based on type
+    switch (targetType) {
+      case 'individual':
+        if (!studentId) {
+          return res.status(400).json({
+            success: false,
+            message: 'Student ID is required for individual payments'
+          });
+        }
+        const student = await Student.findById(studentId);
+        if (!student) {
+          return res.status(404).json({
+            success: false,
+            message: 'Student not found'
+          });
+        }
+        targetStudents = [student];
+        break;
+
+      case 'branch':
+        if (!branchId) {
+          return res.status(400).json({
+            success: false,
+            message: 'Branch ID is required for branch payments'
+          });
+        }
+        targetStudents = await Student.find({ 'branch': branchId, status: 'active' });
+        break;
+
+      case 'all':
+        targetStudents = await Student.find({ status: 'active' });
+        break;
+
+      default:
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid target type'
+        });
+    }
+
+    if (targetStudents.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No active students found for the specified target'
+      });
+    }
+
+    // Create payments for all target students
+    const payments = [];
+    const notifications = [];
+
+    for (const student of targetStudents) {
+      // Generate unique receipt number
+      const receiptNumber = `RCPT_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
+      const payment = new Payment({
+        student: student._id,
+        amount: validatedAmount,
+        paymentType,
+        paymentMethod: 'online',
+        status: 'pending',
+        receiptNumber,
+        submittedDate: new Date(),
+        dueDate: dueDate ? new Date(dueDate) : undefined,
+        notes: description || `${paymentType} payment added by finance department`
+      });
+
+      payments.push(payment);
+
+      // Create notification for student
+      const notification = new Notification({
+        student: student._id,
+        type: 'payment_update',
+        title: 'New Payment Due',
+        message: `A new payment of ₹${validatedAmount} for ${paymentType} has been added to your account.${dueDate ? ` Due date: ${new Date(dueDate).toLocaleDateString()}` : ''}`,
+        paymentId: payment._id,
+        amount: validatedAmount,
+        paymentType,
+        dueDate: dueDate ? new Date(dueDate) : undefined
+      });
+
+      notifications.push(notification);
+    }
+
+    // Save all payments and notifications
+    await Payment.insertMany(payments);
+    await Notification.insertMany(notifications);
+
+    res.json({
+      success: true,
+      message: `Successfully added payments for ${targetStudents.length} student(s)`,
+      paymentsCreated: payments.length
+    });
+
+  } catch (error) {
+    console.error('Error adding payment:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add payment'
+    });
+  }
+});
+
+// Update payment status
+router.put('/update-status/:transactionId', auth, financeAuth, async (req, res) => {
+  try {
+    const { transactionId } = req.params;
+    const { status } = req.body;
+
+    if (!['pending', 'completed', 'failed', 'cancelled'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status'
+      });
+    }
+
+    const payment = await Payment.findById(transactionId).populate('student');
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Payment not found'
+      });
+    }
+
+    const oldStatus = payment.status;
+    payment.status = status;
+
+    // Update paid date if status is completed
+    if (status === 'completed' && oldStatus !== 'completed') {
+      payment.paidDate = new Date();
+      if (!payment.transactionId) {
+        payment.transactionId = `TXN_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      }
+    }
+
+    await payment.save();
+
+    // Create notification for status change
+    let notificationMessage = '';
+    let notificationType = 'payment_update';
+
+    switch (status) {
+      case 'completed':
+        notificationMessage = `Your payment of ₹${payment.amount} for ${payment.paymentType} has been marked as completed.`;
+        break;
+      case 'failed':
+        notificationMessage = `Your payment of ₹${payment.amount} for ${payment.paymentType} has failed. Please contact the finance department.`;
+        break;
+      case 'cancelled':
+        notificationMessage = `Your payment of ₹${payment.amount} for ${payment.paymentType} has been cancelled.`;
+        break;
+      default:
+        notificationMessage = `Your payment status for ${payment.paymentType} has been updated to ${status}.`;
+    }
+
+    const notification = new Notification({
+      student: payment.student._id,
+      type: notificationType,
+      title: 'Payment Status Updated',
+      message: notificationMessage,
+      paymentId: payment._id,
+      amount: payment.amount,
+      paymentType: payment.paymentType
+    });
+
+    await notification.save();
+
+    res.json({
+      success: true,
+      message: 'Payment status updated successfully',
+      payment: {
+        id: payment._id,
+        status: payment.status,
+        paidDate: payment.paidDate,
+        transactionId: payment.transactionId
+      }
+    });
+
+  } catch (error) {
+    console.error('Error updating payment status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update payment status'
+    });
+  }
+});
+
+// Delete transaction permanently
+router.delete('/delete-transaction/:transactionId', auth, financeAuth, async (req, res) => {
+  try {
+    const { transactionId } = req.params;
+
+    const payment = await Payment.findById(transactionId).populate('student');
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Transaction not found'
+      });
+    }
+
+    // Store payment details for notification before deletion
+    const studentId = payment.student._id;
+    const amount = payment.amount;
+    const paymentType = payment.paymentType;
+
+    // Delete the payment
+    await Payment.findByIdAndDelete(transactionId);
+
+    // Delete related notifications
+    await Notification.deleteMany({ paymentId: transactionId });
+
+    // Create notification about deletion
+    const notification = new Notification({
+      student: studentId,
+      type: 'payment_update',
+      title: 'Payment Record Deleted',
+      message: `A payment record for ₹${amount} (${paymentType}) has been removed by the finance department.`,
+      amount,
+      paymentType
+    });
+
+    await notification.save();
+
+    res.json({
+      success: true,
+      message: 'Transaction deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting transaction:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete transaction',
+      error: error.message
+    });
+  }
+});
+
+// Get all payments with pagination and filters
 router.get('/payments', auth, financeAuth, async (req, res) => {
   try {
     const {
       page = 1,
-      limit = 20,
-      search,
+      limit = 10,
       status,
       paymentType,
       academicYear,
       semester,
+      search,
       dateFrom,
       dateTo,
       sortBy = 'createdAt',
@@ -43,11 +438,21 @@ router.get('/payments', auth, financeAuth, async (req, res) => {
     } = req.query;
 
     const query = {};
-    
-    // Build query based on filters
-    if (status) query.status = status;
-    if (paymentType) query.paymentType = paymentType;
+
+    // Filter by status
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+
+    // Filter by payment type
+    if (paymentType && paymentType !== 'all') {
+      query.paymentType = paymentType;
+    }
+
+    // Filter by academic year
     if (academicYear) query.academicYear = academicYear;
+
+    // Filter by semester
     if (semester) query.semester = parseInt(semester);
 
     // Date range filter

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getApiUrl } from '../config/api';
-import { User, Lock, Calendar, LogIn, UserCog, GraduationCap, BookOpen } from 'lucide-react';
+import { User, Lock, Calendar, LogIn, UserCog } from 'lucide-react';
 import axios from 'axios';
 
 interface UnifiedLoginProps {
@@ -9,17 +9,12 @@ interface UnifiedLoginProps {
 }
 
 const UnifiedLogin: React.FC<UnifiedLoginProps> = ({ onLogin }) => {
-  const [loginType, setLoginType] = useState<'admin' | 'student' | 'faculty'>('student');
+  const [loginType, setLoginType] = useState<'admin' | 'student'>('student');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
   const [adminData, setAdminData] = useState({
-    username: '',
-    password: ''
-  });
-  
-  const [facultyData, setFacultyData] = useState({
     username: '',
     password: ''
   });
@@ -32,14 +27,6 @@ const UnifiedLogin: React.FC<UnifiedLoginProps> = ({ onLogin }) => {
   const handleAdminChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setAdminData({
       ...adminData,
-      [e.target.name]: e.target.value
-    });
-    setError('');
-  };
-
-  const handleFacultyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFacultyData({
-      ...facultyData,
       [e.target.name]: e.target.value
     });
     setError('');
@@ -62,8 +49,6 @@ const UnifiedLogin: React.FC<UnifiedLoginProps> = ({ onLogin }) => {
       let response;
       if (loginType === 'admin') {
         response = await axios.post(getApiUrl('api/auth/admin/login'), adminData);
-      } else if (loginType === 'faculty') {
-        response = await axios.post(getApiUrl('api/auth/admin/login'), facultyData);
       } else {
         response = await axios.post(getApiUrl('api/auth/student/login'), studentData);
       }
@@ -141,22 +126,7 @@ const UnifiedLogin: React.FC<UnifiedLoginProps> = ({ onLogin }) => {
                   : 'text-gray-600 hover:text-blue-600'
               }`}
             >
-              <GraduationCap className="w-4 h-4" />
               Student
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              type="button"
-              onClick={() => setLoginType('faculty')}
-              className={`flex-1 flex items-center justify-center gap-2 px-3 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
-                loginType === 'faculty'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-blue-600'
-              }`}
-            >
-              <BookOpen className="w-4 h-4" />
-              Faculty
             </motion.button>
             <motion.button
               whileHover={{ scale: 1.02 }}
@@ -235,58 +205,6 @@ const UnifiedLogin: React.FC<UnifiedLoginProps> = ({ onLogin }) => {
                     </div>
                   </div>
                 </motion.div>
-              ) : loginType === 'faculty' ? (
-                <motion.div
-                  key="faculty"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.3 }}
-                  className="space-y-4"
-                >
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-700">
-                      Username
-                    </label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                      <input
-                        type="text"
-                        name="username"
-                        value={facultyData.username}
-                        onChange={handleFacultyChange}
-                        className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400 h-12 rounded-lg focus-visible:ring-2 focus-visible:ring-blue-500/50 focus:border-blue-500 w-full pl-10 pr-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                        placeholder="Enter your faculty username"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-700">
-                      Password
-                    </label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        name="password"
-                        value={facultyData.password}
-                        onChange={handleFacultyChange}
-                        className="bg-gray-50 border-gray-200 text-gray-900 pr-12 h-12 rounded-lg focus-visible:ring-2 focus-visible:ring-blue-500/50 focus:border-blue-500 w-full pl-10 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                        placeholder="Enter your password"
-                        required
-                      />
-                      <button
-                        type="button"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-600 text-sm font-medium"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? "Hide" : "Show"}
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
               ) : (
                 <motion.div
                   key="admin"
@@ -361,7 +279,7 @@ const UnifiedLogin: React.FC<UnifiedLoginProps> = ({ onLogin }) => {
               ) : (
                 <>
                   <LogIn className="w-4 h-4" />
-                  Sign In as {loginType === 'admin' ? 'Admin' : loginType === 'faculty' ? 'Faculty' : 'Student'}
+                  Sign In as {loginType === 'admin' ? 'Admin' : 'Student'}
                 </>
               )}
             </motion.button>
@@ -372,8 +290,6 @@ const UnifiedLogin: React.FC<UnifiedLoginProps> = ({ onLogin }) => {
             <p className="text-sm text-gray-500">
               {loginType === 'student' 
                 ? "Use your registration number and date of birth to access your student portal"
-                : loginType === 'faculty'
-                ? "Use your faculty credentials to access the faculty dashboard"
                 : "Administrative access required for this login type"
               }
             </p>

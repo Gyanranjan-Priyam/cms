@@ -8,14 +8,14 @@ const router = express.Router();
 // Get all branches
 router.get('/', auth, async (req, res) => {
   try {
-    const branches = await Branch.find({ isActive: true })
+    // Allow filtering by active status, default to all branches for admin
+    const filter = req.query.activeOnly === 'true' ? { isActive: true } : {};
+    
+    const branches = await Branch.find(filter)
       .populate('createdBy', 'username')
       .sort({ createdAt: -1 });
 
-    res.json({
-      success: true,
-      branches
-    });
+    res.json(branches); // Return array directly for frontend compatibility
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -277,6 +277,61 @@ router.get('/:id/stats', auth, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Check if branch code exists
+router.get('/check-code/:code', auth, async (req, res) => {
+  try {
+    const { code } = req.params;
+    const existingBranch = await Branch.findOne({ 
+      code: { $regex: new RegExp(`^${code}$`, 'i') } 
+    });
+    
+    res.json({ exists: !!existingBranch });
+  } catch (error) {
+    console.error('Error checking branch code:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// Permanent delete branch
+router.delete('/:id/permanent', auth, authorize(['head_admin', 'admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const branch = await Branch.findById(id);
+    if (!branch) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Branch not found' 
+      });
+    }
+
+    // Find all students in this branch
+    const studentsInBranch = await Student.find({ branch: id });
+    
+    // Delete all students in this branch first
+    if (studentsInBranch.length > 0) {
+      await Student.deleteMany({ branch: id });
+      console.log(`Deleted ${studentsInBranch.length} students from branch ${branch.name}`);
+    }
+
+    // Delete the branch
+    await Branch.findByIdAndDelete(id);
+
+    res.json({ 
+      success: true, 
+      message: `Branch and ${studentsInBranch.length} students permanently deleted`,
+      deletedBranch: {
+        name: branch.name,
+        code: branch.code,
+        studentsDeleted: studentsInBranch.length
+      }
+    });
+  } catch (error) {
+    console.error('Error permanently deleting branch:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 

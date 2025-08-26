@@ -1,5 +1,11 @@
 // API Configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://cms-yi3b.onrender.com';
+// Environment validation
+if (!import.meta.env.VITE_API_URL) {
+  console.error('❌ VITE_API_URL environment variable is required');
+  console.error('Please create a .env file based on .env.example');
+}
+
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 export const API_CONFIG = {
   baseURL: API_BASE_URL,
