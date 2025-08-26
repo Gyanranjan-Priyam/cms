@@ -312,25 +312,8 @@ const mongoOptions = {
 
 **🎓 Built with ❤️ for Modern Educational Institutions**
 
-*Empowering education through technology*
+*Always for your help."Gyanranjan Priyam"☺️*
 
 [![GitHub stars](https://img.shields.io/github/stars/Gyanranjan-Priyam/cms?style=social)](https://github.com/Gyanranjan-Priyam/cms)
 [![GitHub forks](https://img.shields.io/github/forks/Gyanranjan-Priyam/cms?style=social)](https://github.com/Gyanranjan-Priyam/cms/fork)
 [![GitHub issues](https://img.shields.io/github/issues/Gyanranjan-Priyam/cms)](https://github.com/Gyanranjan-Priyam/cms/issues)
-
-</div>
-- **Bcrypt** for password hashing
-- **Cashfree SDK** for payment processing
-- **CORS** for cross-origin requests
-- **Dotenv** for environment management
-
-### Database
-- **MongoDB** - NoSQL database for flexible data storage
-- **Mongoose** - ODM for MongoDB with schema validation
-- **Aggregation Pipelines** - Complex queries for reporting
-
-
-
-**Built with ❤️ for educational institutions**
-**For any need you can contact. Always your help.☺️**
-
