@@ -49,8 +49,7 @@ app.use(cors({
   origin: [
     "http://localhost:5173", 
     "http://localhost:5174",
-    "https://your-frontend-domain.vercel.app",
-    "https://cms-frontend.vercel.app",
+    "https://cms-gyanranjanpriyam.netlify.app/",
     /\.vercel\.app$/,
     /\.netlify\.app$/
   ],
