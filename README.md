@@ -372,7 +372,11 @@ Password: admin123
 
 Test Student (if sample data loaded):
 Registration: STU001
-Password: student123
+Password: 01/01/2000
+
+Finance Admin Access:
+Username: finance@college.edu
+Password: finance123
 
 🔒 Security Note: These are default credentials for initial setup only.
    Change them immediately in production environments.
