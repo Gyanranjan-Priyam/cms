@@ -152,7 +152,7 @@ const FinanceDashboard: React.FC = () => {
         
         // Optional: Call backend logout endpoint if available
         try {
-          await axios.post('http://localhost:5000/api/auth/logout', {});
+            await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/logout`, {});
         } catch (error) {
           // Backend logout failed, but we already cleared frontend data
           console.warn('Backend logout failed, but frontend logout completed:', error);
@@ -237,7 +237,7 @@ const FinanceDashboard: React.FC = () => {
   const fetchStudents = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/finance/students', {
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/finance/students`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setStudents(response.data.students || []);
@@ -249,7 +249,7 @@ const FinanceDashboard: React.FC = () => {
   const fetchTransactions = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/finance/transactions', {
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/finance/transactions`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -268,7 +268,7 @@ const FinanceDashboard: React.FC = () => {
   const fetchStats = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/finance/stats', {
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/finance/stats`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setStats(response.data.stats || stats);
@@ -320,7 +320,7 @@ const FinanceDashboard: React.FC = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.post('http://localhost:5000/api/finance/add-payment', paymentForm, {
+      const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/finance/add-payment`, paymentForm, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -350,7 +350,7 @@ const FinanceDashboard: React.FC = () => {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.put(
-        `http://localhost:5000/api/finance/update-status/${transactionId}`,
+        `${import.meta.env.VITE_API_URL}/api/finance/update-status/${transactionId}`,
         { status: newStatus },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -373,7 +373,7 @@ const FinanceDashboard: React.FC = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.delete(`http://localhost:5000/api/finance/delete-transaction/${transactionId}`, {
+      const response = await axios.delete(`${import.meta.env.VITE_API_URL}/api/finance/delete-transaction/${transactionId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 

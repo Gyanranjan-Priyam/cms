@@ -115,7 +115,7 @@ const StudentSection: React.FC<StudentSectionProps> = ({ darkMode, facultyId }) 
       });
 
       const response = await axios.get(
-        `http://localhost:5000/api/faculty-dashboard/students/${facultyId}?${params}`,
+        `${import.meta.env.VITE_API_URL}/api/faculty-dashboard/students/${facultyId}?${params}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -137,7 +137,7 @@ const StudentSection: React.FC<StudentSectionProps> = ({ darkMode, facultyId }) 
       });
 
       const response = await axios.get(
-        `http://localhost:5000/api/faculty-dashboard/marks/${facultyId}?${params}`,
+        `${import.meta.env.VITE_API_URL}/api/faculty-dashboard/marks/${facultyId}?${params}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -161,7 +161,7 @@ const StudentSection: React.FC<StudentSectionProps> = ({ darkMode, facultyId }) 
       });
 
       const response = await axios.get(
-        `http://localhost:5000/api/faculty-dashboard/attendance/${facultyId}?${params}`,
+        `${import.meta.env.VITE_API_URL}/api/faculty-dashboard/attendance/${facultyId}?${params}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -179,7 +179,7 @@ const StudentSection: React.FC<StudentSectionProps> = ({ darkMode, facultyId }) 
     try {
       const token = localStorage.getItem('token');
       const response = await axios.post(
-        'http://localhost:5000/api/faculty-dashboard/marks',
+        `${import.meta.env.VITE_API_URL}/api/faculty-dashboard/marks`,
         {
           ...newMark,
           facultyId,
@@ -214,7 +214,7 @@ const StudentSection: React.FC<StudentSectionProps> = ({ darkMode, facultyId }) 
     try {
       const token = localStorage.getItem('token');
       const response = await axios.post(
-        'http://localhost:5000/api/faculty-dashboard/attendance',
+        `${import.meta.env.VITE_API_URL}/api/faculty-dashboard/attendance`,
         {
           attendanceData: attendanceData.records,
           facultyId,

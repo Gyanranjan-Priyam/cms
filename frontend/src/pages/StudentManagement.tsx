@@ -1077,9 +1077,9 @@ const StudentModal: React.FC<{
       }
       
       const url = student 
-        ? `http://localhost:5000/api/students/${student._id}`
-        : 'http://localhost:5000/api/students';
-      
+        ? `${import.meta.env.VITE_API_URL}/api/students/${student._id}`
+        : `${import.meta.env.VITE_API_URL}/api/students`;
+
       const method = student ? 'PUT' : 'POST';
       
       await axios({

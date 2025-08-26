@@ -120,7 +120,7 @@ const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, 
   const fetchDashboardData = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/dashboard/student', {
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/dashboard/student`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setDashboardData(response.data.dashboard);
@@ -134,7 +134,7 @@ const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, 
   const fetchPaymentHistory = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`http://localhost:5000/api/payments/student/${user.id}`, {
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/payments/student/${user.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setPaymentHistory(response.data.payments || []);
@@ -147,7 +147,7 @@ const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, 
     setLoadingResults(true);
     try {
       const token = localStorage.getItem('token');
-      await axios.get(`http://localhost:5000/api/results/student/${user.id}`, {
+      await axios.get(`${import.meta.env.VITE_API_URL}/api/results/student/${user.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       // Results fetched successfully but not stored in state anymore

@@ -39,7 +39,7 @@ const PaymentResult: React.FC = () => {
       const token = localStorage.getItem('token');
       
       // First try to get payment details from our database
-      const response = await axios.get(`http://localhost:5000/api/payments/result/${orderId}`, {
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/payments/result/${orderId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 

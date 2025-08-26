@@ -109,7 +109,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const fetchDashboardData = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/dashboard/admin', {
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/dashboard/admin`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setDashboardData(response.data.dashboard);

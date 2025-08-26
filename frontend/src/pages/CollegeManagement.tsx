@@ -60,12 +60,12 @@ const CollegeManagement: React.FC<CollegeManagementProps> = ({ darkMode }) => {
       const token = localStorage.getItem('token');
       
       // Fetch admins
-      const adminResponse = await axios.get('http://localhost:5000/api/auth/users', {
+      const adminResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/auth/users`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
       // Fetch faculty
-      const facultyResponse = await axios.get('http://localhost:5000/api/admin/faculty', {
+      const facultyResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/admin/faculty`, {
         headers: { Authorization: `Bearer ${token}` },
         params: { limit: 1000 } // Get all faculty
       });
@@ -123,13 +123,13 @@ const CollegeManagement: React.FC<CollegeManagementProps> = ({ darkMode }) => {
       let endpoint, payload;
       
       if (selectedUser.userType === 'admin') {
-        endpoint = 'http://localhost:5000/api/auth/change-password';
+        endpoint = `${import.meta.env.VITE_API_URL}/api/auth/change-password`;
         payload = {
           userId: selectedUser._id,
           newPassword
         };
       } else {
-        endpoint = 'http://localhost:5000/api/auth/change-password';
+        endpoint = `${import.meta.env.VITE_API_URL}/api/auth/change-password`;
         payload = {
           userId: selectedUser._id,
           userType: selectedUser.userType,
@@ -166,14 +166,14 @@ const CollegeManagement: React.FC<CollegeManagementProps> = ({ darkMode }) => {
       let endpoint, payload;
       
       if (selectedUser.userType === 'admin') {
-        endpoint = 'http://localhost:5000/api/auth/change-username';
+        endpoint = `${import.meta.env.VITE_API_URL}/api/auth/change-username`;
         payload = {
           userId: selectedUser._id,
           newUsername,
           oldUsername: selectedUser.username
         };
       } else {
-        endpoint = 'http://localhost:5000/api/auth/change-username';
+        endpoint = `${import.meta.env.VITE_API_URL}/api/auth/change-username`;
         payload = {
           userId: selectedUser._id,
           userType: selectedUser.userType,
