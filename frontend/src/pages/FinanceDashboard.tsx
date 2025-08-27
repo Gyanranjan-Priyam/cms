@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect, useDeferredValue, useTransition } from 'react';
+import { motion, AnimatePresence, MotionConfig } from 'framer-motion';
 import {
   DollarSign,
   Users,
@@ -15,14 +15,15 @@ import {
   Clock,
   RefreshCw,
   User,
-  MapPin,
   Phone,
   Mail,
   Eye,
   Settings,
   Moon,
   Sun,
-  LogOut
+  LogOut,
+  MoreVertical,
+  Copy
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
@@ -104,6 +105,13 @@ const FinanceDashboard: React.FC = () => {
   });
   const [branchFilter, setBranchFilter] = useState<string>('all');
   const [semesterFilter, setSemesterFilter] = useState<string>('all');
+  const deferredSearchTerm = useDeferredValue(searchTerm);
+  const [_isPending, startTransition] = useTransition();
+  const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null);
+  const [menuPlacement, setMenuPlacement] = useState<'down' | 'up'>('down');
+  const [detailsTxn, setDetailsTxn] = useState<Transaction | null>(null);
+
+  // no-op
 
   // Add Payment Form State
   const [paymentForm, setPaymentForm] = useState({
@@ -122,7 +130,7 @@ const FinanceDashboard: React.FC = () => {
 
   useEffect(() => {
     applyFilters();
-  }, [transactions, searchTerm, statusFilter, paymentTypeFilter, dateRange]);
+  }, [transactions, deferredSearchTerm, statusFilter, paymentTypeFilter, dateRange]);
 
   // Dark mode effect
   useEffect(() => {
@@ -281,13 +289,13 @@ const FinanceDashboard: React.FC = () => {
     let filtered = [...transactions];
 
     // Search filter
-    if (searchTerm) {
+    if (deferredSearchTerm) {
       filtered = filtered.filter(transaction => 
-        (transaction.student?.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
-        (transaction.student?.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
-        (transaction.student?.regdNo?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
-        transaction.transactionId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        transaction.receiptNumber.toLowerCase().includes(searchTerm.toLowerCase())
+        (transaction.student?.firstName?.toLowerCase().includes(deferredSearchTerm.toLowerCase()) || false) ||
+        (transaction.student?.lastName?.toLowerCase().includes(deferredSearchTerm.toLowerCase()) || false) ||
+        (transaction.student?.regdNo?.toLowerCase().includes(deferredSearchTerm.toLowerCase()) || false) ||
+        transaction.transactionId.toLowerCase().includes(deferredSearchTerm.toLowerCase()) ||
+        transaction.receiptNumber.toLowerCase().includes(deferredSearchTerm.toLowerCase())
       );
     }
 
@@ -312,6 +320,85 @@ const FinanceDashboard: React.FC = () => {
     }
 
     setFilteredTransactions(filtered);
+  };
+
+  // Derive human-friendly payment mode
+  const getPaymentMode = (t: Transaction) => {
+    const method = (t.paymentMethod || '').toLowerCase();
+    if (method === 'cash') return 'Cash';
+    if (method === 'cheque') return 'Cheque';
+    // Treat any gateway/online methods as Online
+    if (['online', 'razorpay', 'custom_upi', 'custom_qr'].includes(method)) return 'Online';
+    if (t.razorpayOrderId || t.razorpayPaymentId) return 'Online';
+    return 'Cash/Cheque';
+  };
+
+  // Premium Actions handling
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      alert('Copied to clipboard');
+    } catch {
+      console.warn('Clipboard not available');
+    }
+  };
+
+  const updatePaymentMethod = async (t: Transaction, method: 'online' | 'cash' | 'cheque' | 'razorpay' | 'custom_upi' | 'custom_qr') => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(
+        `${import.meta.env.VITE_API_URL}/api/finance/update-status/${t._id}`,
+        { status: t.status, paymentMethod: method },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      await fetchTransactions();
+      setActionMenuOpen(null);
+    } catch (e: any) {
+      alert(e.response?.data?.message || 'Failed to update payment method');
+    }
+  };
+
+  const markStatus = async (t: Transaction, status: 'pending' | 'completed' | 'failed' | 'cancelled') => {
+    await handleUpdatePaymentStatus(t._id, status);
+    setActionMenuOpen(null);
+  };
+
+  const downloadReceipt = (t: Transaction) => {
+    if (t.status !== 'completed') return;
+    const receiptHtml = `<!DOCTYPE html><html><head><title>Receipt</title><style>
+      body{font-family:Arial,sans-serif;max-width:720px;margin:0 auto;padding:24px;color:#111}
+      h1{margin:0 0 8px;text-align:center}
+      .sub{text-align:center;color:#555;margin-bottom:20px}
+      .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0}
+      .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed #e5e7eb}
+      .amount{font-size:20px;font-weight:700;color:#065f46}
+      .badge{display:inline-block;padding:4px 10px;border-radius:999px;background:#dcfce7;color:#065f46;font-weight:600}
+      .foot{margin-top:24px;text-align:center;color:#6b7280;font-size:12px}
+    </style></head><body>
+      <h1>Payment Receipt</h1>
+      <div class="sub">Finance Department • College Management System</div>
+      <div class="grid">
+        <div>
+          <div class="row"><span><b>Student</b></span><span>${t.student?.firstName || ''} ${t.student?.lastName || ''}</span></div>
+          <div class="row"><span><b>Regd No</b></span><span>${t.student?.regdNo || ''}</span></div>
+          <div class="row"><span><b>Type</b></span><span>${t.paymentType}</span></div>
+          <div class="row"><span><b>Mode</b></span><span>${getPaymentMode(t)}</span></div>
+        </div>
+        <div>
+          <div class="row"><span><b>Receipt No</b></span><span>${t.receiptNumber || '-'}</span></div>
+          <div class="row"><span><b>Transaction ID</b></span><span>${t.transactionId || '-'}</span></div>
+          <div class="row"><span><b>Submitted</b></span><span>${new Date(t.submittedDate).toLocaleString()}</span></div>
+          <div class="row"><span><b>Paid</b></span><span>${t.paidDate ? new Date(t.paidDate).toLocaleString() : '-'}</span></div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <span><b>Amount</b></span><span class="amount">₹${t.amount.toLocaleString()}</span>
+      </div>
+      <div style="margin-top:12px"><span class="badge">COMPLETED</span></div>
+      <div class="foot">This is a computer-generated receipt. Generated on ${new Date().toLocaleString()}.</div>
+    </body></html>`;
+    const w = window.open('', '_blank');
+    if (w) { w.document.write(receiptHtml); w.document.close(); w.focus(); w.print(); }
   };
 
   const handleAddPayment = async (e: React.FormEvent) => {
@@ -432,9 +519,9 @@ const FinanceDashboard: React.FC = () => {
     );
   };
 
-  const StatCard = ({ icon: Icon, title, value, subtitle, trend, color }: any) => (
+  const StatCard = React.memo(({ icon: Icon, title, value, subtitle, trend, color }: any) => (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={false}
       animate={{ opacity: 1, y: 0 }}
       className={`rounded-xl shadow-lg p-6 border transition-colors duration-300 ${
         darkMode 
@@ -468,20 +555,22 @@ const FinanceDashboard: React.FC = () => {
         </div>
       )}
     </motion.div>
-  );
+  ));
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
       {/* Sidebar */}
       <motion.div
         initial={false}
         animate={{ width: sidebarCollapsed ? 80 : 256 }}
-        transition={{ duration: 0.3, ease: "easeInOut" }}
+        transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
         onMouseEnter={() => setSidebarCollapsed(false)}
         onMouseLeave={() => setSidebarCollapsed(true)}
-        className={`fixed inset-y-0 left-0 z-50 shadow-lg transition-colors duration-300 ${
+        className={`fixed inset-y-0 left-0 z-50 shadow-lg transition-colors duration-300 transform-gpu ${
           darkMode ? 'bg-gray-800 border-r border-gray-700' : 'bg-white border-r border-gray-200'
         }`}
+        style={{ willChange: 'width' }}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
@@ -514,7 +603,7 @@ const FinanceDashboard: React.FC = () => {
               return (
                 <button
                   key={item.id}
-                  onClick={() => setActiveTab(item.id as any)}
+                  onClick={() => startTransition(() => setActiveTab(item.id as any))}
                   className={`w-full flex items-center px-4 py-3 rounded-lg transition-all duration-200 group ${
                     activeTab === item.id
                       ? darkMode 
@@ -645,8 +734,9 @@ const FinanceDashboard: React.FC = () => {
       <motion.div
         initial={false}
         animate={{ marginLeft: sidebarCollapsed ? 80 : 256 }}
-        transition={{ duration: 0.3, ease: "easeInOut" }}
-        className="transition-all duration-300"
+        transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
+        className="transition-all duration-300 transform-gpu"
+        style={{ willChange: 'margin-left' as any }}
       >
         {/* Header */}
         <div className={`shadow-sm border-b px-6 py-4 transition-colors duration-300 ${
@@ -769,19 +859,19 @@ const FinanceDashboard: React.FC = () => {
                         <tr className={`border-b transition-colors duration-300 ${
                           darkMode ? 'border-gray-700' : 'border-gray-200'
                         }`}>
-                          <th className={`text-left py-3 px-4 font-medium transition-colors duration-300 ${
+                          <th className={`text-center py-3 px-4 font-medium transition-colors duration-300 ${
                             darkMode ? 'text-gray-300' : 'text-gray-900'
                           }`}>Student</th>
-                          <th className={`text-left py-3 px-4 font-medium transition-colors duration-300 ${
+                          <th className={`text-center py-3 px-4 font-medium transition-colors duration-300 ${
                             darkMode ? 'text-gray-300' : 'text-gray-900'
                           }`}>Amount</th>
-                          <th className={`text-left py-3 px-4 font-medium transition-colors duration-300 ${
+                          <th className={`text-center py-3 px-4 font-medium transition-colors duration-300 ${
                             darkMode ? 'text-gray-300' : 'text-gray-900'
                           }`}>Type</th>
-                          <th className={`text-left py-3 px-4 font-medium transition-colors duration-300 ${
+                          <th className={`text-center py-3 px-4 font-medium transition-colors duration-300 ${
                             darkMode ? 'text-gray-300' : 'text-gray-900'
                           }`}>Status</th>
-                          <th className={`text-left py-3 px-4 font-medium transition-colors duration-300 ${
+                          <th className={`text-center py-3 px-4 font-medium transition-colors duration-300 ${
                             darkMode ? 'text-gray-300' : 'text-gray-900'
                           }`}>Date</th>
                         </tr>
@@ -956,121 +1046,86 @@ const FinanceDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Students Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {students
-                    .filter(student => {
-                      const matchesSearch = searchTerm === '' ||
-                        student.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        student.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        student.regdNo.toLowerCase().includes(searchTerm.toLowerCase());
-                      
-                      const matchesBranch = branchFilter === 'all' || student.branch?._id === branchFilter;
-                      const matchesSemester = semesterFilter === 'all' || student.semester.toString() === semesterFilter;
-                      
-                      return matchesSearch && matchesBranch && matchesSemester;
-                    })
-                    .map((student) => {
-                      const totalPaid = getStudentTotalPaid(student._id);
-                      return (
-                    <motion.div
-                      key={student._id}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className={`rounded-xl shadow-lg p-6 hover:shadow-xl transition-all duration-300 ${
-                        darkMode 
-                          ? 'bg-gray-800 border border-gray-700 hover:bg-gray-750' 
-                          : 'bg-white border border-gray-100 hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex items-center space-x-4 mb-4">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors duration-300 ${
-                          darkMode ? 'bg-blue-600' : 'bg-blue-100'
-                        }`}>
-                          <User className={`h-6 w-6 transition-colors duration-300 ${
-                            darkMode ? 'text-white' : 'text-blue-600'
-                          }`} />
-                        </div>
-                        <div className="flex-1">
-                          <h3 className={`font-semibold transition-colors duration-300 ${
-                            darkMode ? 'text-white' : 'text-gray-900'
-                          }`}>
-                            {student.firstName} {student.lastName}
-                          </h3>
-                          <p className={`text-sm transition-colors duration-300 ${
-                            darkMode ? 'text-gray-400' : 'text-gray-500'
-                          }`}>{student.regdNo}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className={`text-sm font-medium transition-colors duration-300 ${
-                            darkMode ? 'text-green-400' : 'text-green-600'
-                          }`}>
-                            ₹{totalPaid.toLocaleString()}
-                          </p>
-                          <p className={`text-xs transition-colors duration-300 ${
-                            darkMode ? 'text-gray-500' : 'text-gray-400'
-                          }`}>
-                            Total Paid
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-2 text-sm">
-                        <div className={`flex items-center transition-colors duration-300 ${
-                          darkMode ? 'text-gray-300' : 'text-gray-600'
-                        }`}>
-                          <Building className="h-4 w-4 mr-2" />
-                          {student.branch?.name || 'N/A'}
-                        </div>
-                        <div className={`flex items-center transition-colors duration-300 ${
-                          darkMode ? 'text-gray-300' : 'text-gray-600'
-                        }`}>
-                          <MapPin className="h-4 w-4 mr-2" />
-                          {student.department?.name || 'N/A'}
-                        </div>
-                        <div className={`flex items-center transition-colors duration-300 ${
-                          darkMode ? 'text-gray-300' : 'text-gray-600'
-                        }`}>
-                          <User className="h-4 w-4 mr-2" />
-                          Semester {student.semester}
-                        </div>
-                        <div className={`flex items-center transition-colors duration-300 ${
-                          darkMode ? 'text-gray-300' : 'text-gray-600'
-                        }`}>
-                          <Mail className="h-4 w-4 mr-2" />
-                          {student.email}
-                        </div>
-                        <div className={`flex items-center transition-colors duration-300 ${
-                          darkMode ? 'text-gray-300' : 'text-gray-600'
-                        }`}>
-                          <Phone className="h-4 w-4 mr-2" />
-                          {student.phone}
-                        </div>
-                      </div>
-
-                      <div className="flex space-x-2 mt-4">
-                        <button
-                          onClick={() => {
-                            setPaymentForm(prev => ({ ...prev, studentId: student._id }));
-                            setActiveTab('add-payment');
-                          }}
-                          className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                        >
-                          Add Payment
-                        </button>
-                        <button
-                          onClick={() => navigate(`/student-dashboard/${student.regdNo}`)}
-                          className={`px-3 py-2 border rounded-lg transition-colors ${
-                            darkMode 
-                              ? 'border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white' 
-                              : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                          }`}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </motion.div>
-                  )})}
+                {/* Students Table */}
+                <div className={`rounded-xl shadow-lg overflow-hidden transition-colors duration-300 ${
+                  darkMode 
+                    ? 'bg-gray-800 border border-gray-700' 
+                    : 'bg-white border border-gray-100'
+                }`}>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className={`${darkMode ? 'bg-gray-700' : 'bg-gray-50'} transition-colors duration-300`}>
+                        <tr>
+                          <th className={`text-center align-middle py-3 px-4 font-medium ${darkMode ? 'text-gray-300' : 'text-gray-900'}`}>Student</th>
+                          <th className={`text-center align-middle py-3 px-4 font-medium ${darkMode ? 'text-gray-300' : 'text-gray-900'}`}>Branch</th>
+                          <th className={`text-center align-middle py-3 px-4 font-medium ${darkMode ? 'text-gray-300' : 'text-gray-900'}`}>Department</th>
+                          <th className={`text-center align-middle py-3 px-4 font-medium ${darkMode ? 'text-gray-300' : 'text-gray-900'}`}>Semester</th>
+                          <th className={`text-center align-middle py-3 px-4 font-medium ${darkMode ? 'text-gray-300' : 'text-gray-900'}`}>Contact</th>
+                          <th className={`text-center align-middle py-3 px-4 font-medium ${darkMode ? 'text-gray-300' : 'text-gray-900'}`}>Total Paid</th>
+                          <th className={`text-center align-middle py-3 px-4 font-medium ${darkMode ? 'text-gray-300' : 'text-gray-900'}`}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {students
+                          .filter(student => {
+                            const matchesSearch = searchTerm === '' ||
+                              student.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                              student.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                              student.regdNo.toLowerCase().includes(searchTerm.toLowerCase());
+                            const matchesBranch = branchFilter === 'all' || student.branch?._id === branchFilter;
+                            const matchesSemester = semesterFilter === 'all' || student.semester.toString() === semesterFilter;
+                            return matchesSearch && matchesBranch && matchesSemester;
+                          })
+                          .map((student) => {
+                            const totalPaid = getStudentTotalPaid(student._id);
+                            return (
+                              <tr key={student._id} className={`${darkMode ? 'border-gray-700 hover:bg-gray-700' : 'border-gray-100 hover:bg-gray-50'} border-b transition-colors duration-300`}>
+                                <td className="py-3 px-4">
+                                  <div>
+                                    <p className={`${darkMode ? 'text-white' : 'text-gray-900'} font-medium`}>{student.firstName} {student.lastName}</p>
+                                    <p className={`${darkMode ? 'text-gray-400' : 'text-gray-500'} text-sm`}>{student.regdNo}</p>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4 text-center">
+                                  {student.branch?.name || 'N/A'}{student.branch?.code ? ` (${student.branch.code})` : ''}
+                                </td>
+                                <td className="py-3 px-4 text-center">{student.department?.name || 'N/A'}</td>
+                                <td className="py-3 px-4 text-center">Semester {student.semester}</td>
+                                <td className="py-3 px-4">
+                                  <div className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} text-sm`}>
+                                    <div className="flex items-center"><Mail className="h-4 w-4 mr-2" />{student.email}</div>
+                                    <div className="flex items-center mt-1"><Phone className="h-4 w-4 mr-2" />{student.phone}</div>
+                                  </div>
+                                </td>
+                                <td className={`${darkMode ? 'text-white' : 'text-gray-900'} py-3 px-4 text-center font-medium`}>
+                                  ₹{totalPaid.toLocaleString()}
+                                </td>
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center justify-center gap-2">
+                                    <button
+                                      onClick={() => {
+                                        setPaymentForm(prev => ({ ...prev, studentId: student._id }));
+                                        setActiveTab('add-payment');
+                                      }}
+                                      className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                                    >
+                                      Add Payment
+                                    </button>
+                                    <button
+                                      onClick={() => navigate(`/student-dashboard/${student.regdNo}`)}
+                                      className={`${darkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} px-3 py-2 border rounded-lg transition-colors`}
+                                      title="View"
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -1199,31 +1254,34 @@ const FinanceDashboard: React.FC = () => {
                     ? 'bg-gray-800 border border-gray-700' 
                     : 'bg-white border border-gray-100'
                 }`}>
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto max-h-[65vh] overflow-y-auto">
                     <table className="w-full">
-                      <thead className={`transition-colors duration-300 ${
+                      <thead className={`sticky top-0 z-10 transition-colors duration-300 ${
                         darkMode ? 'bg-gray-700' : 'bg-gray-50'
                       }`}>
                         <tr>
-                          <th className={`text-left py-4 px-6 font-medium transition-colors duration-300 ${
+                          <th className={`text-center align-middle py-4 px-6 font-medium transition-colors duration-300 ${
                             darkMode ? 'text-gray-300' : 'text-gray-900'
                           }`}>Transaction</th>
-                          <th className={`text-left py-4 px-6 font-medium transition-colors duration-300 ${
+                          <th className={`text-center align-middle py-4 px-6 font-medium transition-colors duration-300 ${
                             darkMode ? 'text-gray-300' : 'text-gray-900'
                           }`}>Student</th>
-                          <th className={`text-left py-4 px-6 font-medium transition-colors duration-300 ${
+                          <th className={`text-center align-middle py-4 px-6 font-medium transition-colors duration-300 ${
                             darkMode ? 'text-gray-300' : 'text-gray-900'
                           }`}>Amount</th>
-                          <th className={`text-left py-4 px-6 font-medium transition-colors duration-300 ${
+                          <th className={`text-center align-middle py-4 px-6 font-medium transition-colors duration-300 ${
                             darkMode ? 'text-gray-300' : 'text-gray-900'
                           }`}>Type</th>
-                          <th className={`text-left py-4 px-6 font-medium transition-colors duration-300 ${
+                          <th className={`text-center align-middle py-4 px-6 font-medium transition-colors duration-300 ${
+                            darkMode ? 'text-gray-300' : 'text-gray-900'
+                          }`}>Mode</th>
+                          <th className={`text-center align-middle py-4 px-6 font-medium transition-colors duration-300 ${
                             darkMode ? 'text-gray-300' : 'text-gray-900'
                           }`}>Status</th>
-                          <th className={`text-left py-4 px-6 font-medium transition-colors duration-300 ${
+                          <th className={`text-center align-middle py-4 px-6 font-medium transition-colors duration-300 ${
                             darkMode ? 'text-gray-300' : 'text-gray-900'
                           }`}>Date</th>
-                          <th className={`text-left py-4 px-6 font-medium transition-colors duration-300 ${
+                          <th className={`text-center align-middle py-4 px-6 font-medium transition-colors duration-300 ${
                             darkMode ? 'text-gray-300' : 'text-gray-900'
                           }`}>Actions</th>
                         </tr>
@@ -1270,6 +1328,11 @@ const FinanceDashboard: React.FC = () => {
                                 {transaction.paymentType}
                               </span>
                             </td>
+                            <td className="py-4 px-6">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                                {getPaymentMode(transaction)}
+                              </span>
+                            </td>
                             <td className="py-4 px-6">{getStatusBadge(transaction.status)}</td>
                             <td className={`py-4 px-6 transition-colors duration-300 ${
                               darkMode ? 'text-gray-300' : 'text-gray-600'
@@ -1282,29 +1345,81 @@ const FinanceDashboard: React.FC = () => {
                               </div>
                             </td>
                             <td className="py-4 px-6">
-                              <div className="flex items-center space-x-2">
-                                <select
-                                  value={transaction.status}
-                                  onChange={(e) => handleUpdatePaymentStatus(transaction._id, e.target.value)}
-                                  className={`text-sm border rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-300 ${
-                                    darkMode 
-                                      ? 'bg-gray-700 border-gray-600 text-white' 
-                                      : 'bg-white border-gray-300 text-gray-900'
-                                  }`}
-                                  disabled={transaction.status === 'completed'}
-                                >
-                                  <option value="pending">Pending</option>
-                                  <option value="completed">Completed</option>
-                                  <option value="failed">Failed</option>
-                                  <option value="cancelled">Cancelled</option>
-                                </select>
+                              <div className="relative inline-block text-left">
                                 <button
-                                  onClick={() => handleDeleteTransaction(transaction._id)}
-                                  className="p-1 text-red-600 hover:text-red-800 transition-colors"
-                                  title="Delete Transaction"
+                                  onClick={(e) => {
+                                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                    const estimatedMenuHeight = 320;
+                                    const needsUp = rect.bottom + estimatedMenuHeight > window.innerHeight - 16;
+                                    setMenuPlacement(needsUp ? 'up' : 'down');
+                                    setActionMenuOpen(prev => prev === transaction._id ? null : transaction._id);
+                                  }}
+                                  className={`p-2 rounded-lg border transition-colors ${darkMode ? 'border-gray-600 hover:bg-gray-700 text-gray-200' : 'border-gray-300 hover:bg-gray-100 text-gray-700'}`}
+                                  title="Actions"
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  <MoreVertical className="h-4 w-4" />
                                 </button>
+                                <AnimatePresence>
+                                  {actionMenuOpen === transaction._id && (
+                                    <motion.div
+                                      initial={{ opacity: 0, y: menuPlacement === 'down' ? 8 : -8, scale: 0.98 }}
+                                      animate={{ opacity: 1, y: menuPlacement === 'down' ? 4 : -4, scale: 1 }}
+                                      exit={{ opacity: 0, y: menuPlacement === 'down' ? 8 : -8, scale: 0.98 }}
+                                      transition={{ duration: 0.15 }}
+                                      className={`absolute right-0 ${menuPlacement === 'down' ? 'top-full mt-2' : 'bottom-full mb-2'} w-56 rounded-xl shadow-2xl z-50 overflow-hidden border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}
+                                    >
+                                      <div className="py-1">
+                                        <button
+                                          onClick={() => { setDetailsTxn(transaction); setActionMenuOpen(null); }}
+                                          className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${darkMode ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-800 hover:bg-gray-50'}`}
+                                        >
+                                          <Eye className="h-4 w-4" /> View details
+                                        </button>
+                                        <div className={`px-3 pt-2 pb-1 text-xs uppercase tracking-wide ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Quick actions</div>
+                                        <div className="px-2 pb-1 grid grid-cols-2 gap-2">
+                                          <button onClick={() => markStatus(transaction, 'completed')} className={`px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1 ${darkMode ? 'bg-green-900/30 text-green-300 hover:bg-green-900/50' : 'bg-green-50 text-green-700 hover:bg-green-100'}`}>
+                                            <CheckCircle className="h-3.5 w-3.5" /> Complete
+                                          </button>
+                                          <button onClick={() => markStatus(transaction, 'pending')} className={`px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1 ${darkMode ? 'bg-yellow-900/30 text-yellow-300 hover:bg-yellow-900/50' : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'}`}>
+                                            <Clock className="h-3.5 w-3.5" /> Pending
+                                          </button>
+                                          <button onClick={() => markStatus(transaction, 'failed')} className={`px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1 ${darkMode ? 'bg-red-900/30 text-red-300 hover:bg-red-900/50' : 'bg-red-50 text-red-700 hover:bg-red-100'}`}>
+                                            <XCircle className="h-3.5 w-3.5" /> Failed
+                                          </button>
+                                          <button onClick={() => markStatus(transaction, 'cancelled')} className={`px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1 ${darkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+                                            <XCircle className="h-3.5 w-3.5" /> Cancel
+                                          </button>
+                                        </div>
+                                        <div className={`px-3 pt-2 pb-1 text-xs uppercase tracking-wide ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Mode</div>
+                                        <div className="px-2 pb-2 grid grid-cols-3 gap-2">
+                                          <button onClick={() => updatePaymentMethod(transaction, 'cash')} className={`px-2.5 py-1.5 rounded-lg text-xs ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' : 'bg-gray-100 hover:bg-gray-200 text-gray-800'}`}>Cash</button>
+                                          <button onClick={() => updatePaymentMethod(transaction, 'cheque')} className={`px-2.5 py-1.5 rounded-lg text-xs ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' : 'bg-gray-100 hover:bg-gray-200 text-gray-800'}`}>Cheque</button>
+                                          <button onClick={() => updatePaymentMethod(transaction, 'online')} className={`px-2.5 py-1.5 rounded-lg text-xs ${darkMode ? 'bg-blue-900/30 hover:bg-blue-900/50 text-blue-300' : 'bg-blue-50 hover:bg-blue-100 text-blue-700'}`}>Online</button>
+                                        </div>
+                                        <div className={`border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`} />
+                                        <button
+                                          onClick={() => { if (transaction.status === 'completed') downloadReceipt(transaction); setActionMenuOpen(null); }}
+                                          disabled={transaction.status !== 'completed'}
+                                          className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${transaction.status !== 'completed' ? 'opacity-50 cursor-not-allowed' : ''} ${darkMode ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-800 hover:bg-gray-50'}`}
+                                        >
+                                          <Receipt className="h-4 w-4" /> Download receipt
+                                        </button>
+                                        <button
+                                          onClick={() => { copyToClipboard(transaction.transactionId || ''); setActionMenuOpen(null); }}
+                                          className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${darkMode ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-800 hover:bg-gray-50'}`}
+                                        >
+                                          <Copy className="h-4 w-4" /> Copy TXN ID
+                                        </button>
+                                        <button
+                                          onClick={() => { setActionMenuOpen(null); handleDeleteTransaction(transaction._id); }}
+                                          className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 text-red-600 hover:bg-red-50 ${darkMode ? 'hover:bg-red-900/20' : ''}`}
+                                        >
+                                          <Trash2 className="h-4 w-4" /> Delete
+                                        </button>
+                                      </div>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
                               </div>
                             </td>
                           </tr>
@@ -1313,6 +1428,46 @@ const FinanceDashboard: React.FC = () => {
                     </table>
                   </div>
                 </div>
+                {/* Details Modal */}
+                <AnimatePresence>
+                  {detailsTxn && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+                    >
+                      <motion.div
+                        initial={{ scale: 0.96, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.96, opacity: 0 }}
+                        className={`w-full max-w-xl rounded-2xl shadow-2xl border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}
+                      >
+                        <div className={`px-6 py-4 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                          <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Transaction Details</h3>
+                        </div>
+                        <div className="px-6 py-4 space-y-3">
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div><div className="text-gray-500 dark:text-gray-400">Student</div><div className={`${darkMode ? 'text-white' : 'text-gray-900'}`}>{detailsTxn.student?.firstName} {detailsTxn.student?.lastName}</div></div>
+                            <div><div className="text-gray-500 dark:text-gray-400">Regd No</div><div className={`${darkMode ? 'text-white' : 'text-gray-900'}`}>{detailsTxn.student?.regdNo}</div></div>
+                            <div><div className="text-gray-500 dark:text-gray-400">Amount</div><div className={`${darkMode ? 'text-white' : 'text-gray-900'}`}>₹{detailsTxn.amount.toLocaleString()}</div></div>
+                            <div><div className="text-gray-500 dark:text-gray-400">Type</div><div className={`${darkMode ? 'text-white' : 'text-gray-900'}`}>{detailsTxn.paymentType}</div></div>
+                            <div><div className="text-gray-500 dark:text-gray-400">Mode</div><div className={`${darkMode ? 'text-white' : 'text-gray-900'}`}>{getPaymentMode(detailsTxn)}</div></div>
+                            <div><div className="text-gray-500 dark:text-gray-400">Status</div><div>{getStatusBadge(detailsTxn.status)}</div></div>
+                            <div><div className="text-gray-500 dark:text-gray-400">Transaction ID</div><div className="flex items-center gap-2"><span className={`${darkMode ? 'text-white' : 'text-gray-900'}`}>{detailsTxn.transactionId || '-'}</span><button onClick={() => copyToClipboard(detailsTxn.transactionId || '')} className={`p-1 rounded ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}><Copy className="h-3.5 w-3.5"/></button></div></div>
+                            <div><div className="text-gray-500 dark:text-gray-400">Receipt</div><div className={`${darkMode ? 'text-white' : 'text-gray-900'}`}>{detailsTxn.receiptNumber || '-'}</div></div>
+                            <div><div className="text-gray-500 dark:text-gray-400">Submitted</div><div className={`${darkMode ? 'text-white' : 'text-gray-900'}`}>{new Date(detailsTxn.submittedDate).toLocaleString()}</div></div>
+                            <div><div className="text-gray-500 dark:text-gray-400">Paid</div><div className={`${darkMode ? 'text-white' : 'text-gray-900'}`}>{detailsTxn.paidDate ? new Date(detailsTxn.paidDate).toLocaleString() : '-'}</div></div>
+                          </div>
+                        </div>
+                        <div className={`px-6 py-4 border-t flex items-center justify-end gap-2 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                          <button onClick={() => setDetailsTxn(null)} className={`px-4 py-2 rounded-lg border ${darkMode ? 'border-gray-600 text-gray-200 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-100'}`}>Close</button>
+                          <button onClick={() => { if (detailsTxn) downloadReceipt(detailsTxn); }} disabled={!detailsTxn || detailsTxn.status !== 'completed'} className={`px-4 py-2 rounded-lg ${detailsTxn?.status === 'completed' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-blue-300 text-white cursor-not-allowed'}`}>Download Receipt</button>
+                        </div>
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.div>
             )}
 
@@ -1551,6 +1706,7 @@ const FinanceDashboard: React.FC = () => {
         </div>
       </motion.div>
     </div>
+    </MotionConfig>
   );
 };
 

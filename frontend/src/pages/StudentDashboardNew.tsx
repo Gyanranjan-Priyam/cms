@@ -16,6 +16,7 @@ import {
   AlertCircle,
   Moon,
   Sun,
+  RefreshCw,
   Settings,
   Bell,
   Search,
@@ -56,9 +57,12 @@ const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, 
   const [showBalance, setShowBalance] = useState(true);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
-  const [open, setOpen] = useState(window.innerWidth >= 768);
+  const [open, setOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [loadingResults, setLoadingResults] = useState(false);
+  const [results, setResults] = useState<any[]>([]);
+  const [cgpa, setCgpa] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     // Route protection: ensure the regdNo matches the logged-in user
@@ -94,19 +98,7 @@ const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, 
     }
   }, [isDarkMode]);
 
-  useEffect(() => {
-    // Handle window resize for responsive sidebar
-    const handleResize = () => {
-      if (window.innerWidth < 768) {
-        setOpen(false);
-      } else {
-        setOpen(true);
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  // Sidebar is auto-collapsed by default (like admin). It expands on hover.
 
   useEffect(() => {
     // Update current time every second
@@ -147,15 +139,30 @@ const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, 
     setLoadingResults(true);
     try {
       const token = localStorage.getItem('token');
-      await axios.get(`${import.meta.env.VITE_API_URL}/api/results/student/${user.id}`, {
+      const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/results/student/${user.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      // Results fetched successfully but not stored in state anymore
+      const data = res.data?.data || {};
+      setResults(data.results || []);
+      setCgpa(typeof data.cgpa === 'number' ? data.cgpa : null);
     } catch (error) {
       console.error('Error fetching results:', error);
       // No results to display
     } finally {
       setLoadingResults(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        fetchDashboardData(),
+        fetchPaymentHistory(),
+        fetchResults()
+      ]);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -297,11 +304,19 @@ const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, 
             </div>
             <div class="receipt-row">
               <span><strong>Payment Date:</strong></span>
-              <span>${new Date(payment.paymentDate).toLocaleDateString()}</span>
+              <span>${payment.paidDate ? new Date(payment.paidDate).toLocaleDateString() : 'N/A'}</span>
             </div>
             <div class="receipt-row">
               <span><strong>Payment Type:</strong></span>
               <span>${payment.paymentType}</span>
+            </div>
+            <div class="receipt-row">
+              <span><strong>Payment Method:</strong></span>
+              <span>${(payment.paymentMethod || '').toString().replace('_',' ').toUpperCase()}</span>
+            </div>
+            <div class="receipt-row">
+              <span><strong>Transaction ID:</strong></span>
+              <span>${payment.transactionId || 'N/A'}</span>
             </div>
             <div class="receipt-row">
               <span><strong>Payment Status:</strong></span>
@@ -462,14 +477,16 @@ const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, 
             initial={false}
             animate={{ width: open ? 280 : 80 }}
             transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-            className="fixed left-0 top-0 h-full bg-white/80 dark:bg-neutral-900/80 backdrop-blur-xl border-r border-neutral-200/50 dark:border-neutral-700/50 z-50 flex flex-col shadow-2xl"
+            className="fixed left-0 top-0 h-full bg-gray-100 dark:bg-gray-800 border-r border-neutral-200 dark:border-gray-700 z-50 flex flex-col shadow-2xl"
+            onMouseEnter={() => setOpen(true)}
+            onMouseLeave={() => setOpen(false)}
           >
             {/* Toggle Button */}
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={() => setOpen(!open)}
-              className="absolute -right-3 top-8 h-6 w-6 rounded-full bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 flex items-center justify-center shadow-lg hover:shadow-xl transition-all z-10"
+              className="absolute -right-3 top-8 h-6 w-6 rounded-full bg-gray-100 dark:bg-neutral-700 border border-neutral-300 dark:border-neutral-600 flex items-center justify-center shadow-lg hover:shadow-xl transition-all z-10"
             >
               {open ? (
                 <ChevronLeft className="h-3 w-3 text-neutral-600 dark:text-neutral-400" />
@@ -479,7 +496,7 @@ const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, 
             </motion.button>
 
             {/* Header with Logo */}
-            <div className="p-4 border-b border-neutral-200/50 dark:border-neutral-700/50">
+            <div className="p-4 border-b border-neutral-200 dark:border-gray-700">
               <motion.div
                 initial={false}
                 animate={{ opacity: open ? 1 : 0 }}
@@ -517,10 +534,10 @@ const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, 
                   }}
                   whileHover={{ scale: 1.02, x: 2 }}
                   whileTap={{ scale: 0.98 }}
-                  className={`w-full flex items-center space-x-3 px-3 py-3 rounded-xl transition-all duration-200 group ${
+          className={`w-full flex items-center space-x-3 px-3 py-3 rounded-xl transition-all duration-200 group ${
                     link.active 
                       ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg' 
-                      : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800/50'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                   }`}
                   title={!open ? link.label : undefined}
                 >
@@ -542,10 +559,10 @@ const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, 
             </div>
             
             {/* User Profile Section */}
-            <div className="p-4 border-t border-neutral-200/50 dark:border-neutral-700/50 space-y-3">
+            <div className="p-4 border-t border-neutral-200 dark:border-gray-700 space-y-3">
               <motion.div
                 whileHover={{ scale: 1.02 }}
-                className={`flex items-center space-x-3 p-3 rounded-xl bg-gradient-to-r from-neutral-100 to-neutral-50 dark:from-neutral-800/50 dark:to-neutral-700/50 ${
+                className={`flex items-center space-x-3 p-3 rounded-xl bg-gray-200 dark:bg-gray-700 ${
                   open ? '' : 'justify-center'
                 }`}
               >
@@ -599,6 +616,8 @@ const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, 
             onLogout={onLogout} 
             getRemainingTime={getRemainingTime}
             dashboardData={dashboardData}
+            results={results}
+            cgpa={cgpa}
             filteredPaymentHistory={filteredPaymentHistory}
             isDarkMode={isDarkMode}
             toggleDarkMode={toggleDarkMode}
@@ -606,6 +625,8 @@ const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, 
             setActiveTab={setActiveTab}
             fetchPaymentHistory={fetchPaymentHistory}
             fetchResults={fetchResults}
+            handleRefresh={handleRefresh}
+            refreshing={refreshing}
             handlePayment={handlePayment}
             handleRetryPayment={handleRetryPayment}
             handlePrintReceipt={handlePrintReceipt}
@@ -617,15 +638,64 @@ const StudentDashboardNew: React.FC<StudentDashboardProps> = ({ user, onLogout, 
             setShowBalance={setShowBalance}
             showNotifications={showNotifications}
             setShowNotifications={setShowNotifications}
-            showNotificationModal={showNotificationModal}
-            setShowNotificationModal={setShowNotificationModal}
-            notificationMessage={notificationMessage}
             user={user}
             currentTime={currentTime}
             loadingResults={loadingResults}
           />
         </div>
       </div>
+      {/* Notification Modal */}
+      <AnimatePresence>
+        {showNotificationModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white dark:bg-gray-800 rounded-2xl p-8 max-w-md w-full"
+            >
+              <div className="text-center">
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
+                  notificationMessage.includes('failed') || notificationMessage.includes('cancelled')
+                    ? 'bg-red-100 dark:bg-red-900/30'
+                    : notificationMessage.includes('pending')
+                    ? 'bg-yellow-100 dark:bg-yellow-900/30'
+                    : 'bg-green-100 dark:bg-green-900/30'
+                }`}>
+                  {notificationMessage.includes('failed') || notificationMessage.includes('cancelled') ? (
+                    <AlertCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
+                  ) : notificationMessage.includes('pending') ? (
+                    <Clock className="w-8 h-8 text-yellow-600 dark:text-yellow-400" />
+                  ) : (
+                    <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
+                  )}
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                  {notificationMessage.includes('failed') || notificationMessage.includes('cancelled')
+                    ? 'Payment Failed'
+                    : notificationMessage.includes('pending')
+                    ? 'Payment Submitted'
+                    : 'Payment Status'}
+                </h3>
+                <p className="text-gray-600 dark:text-gray-300 mb-6">
+                  {notificationMessage}
+                </p>
+                <button
+                  onClick={() => setShowNotificationModal(false)}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                >
+                  OK
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -670,6 +740,8 @@ export const StudentLogoIcon = () => {
 const StudentDashboardContent = ({ 
   getRemainingTime, 
   dashboardData,
+  results,
+  cgpa,
   filteredPaymentHistory,
   isDarkMode, 
   toggleDarkMode, 
@@ -677,6 +749,8 @@ const StudentDashboardContent = ({
   setActiveTab,
   fetchPaymentHistory,
   fetchResults,
+  handleRefresh,
+  refreshing,
   handlePayment,
   handleRetryPayment,
   handlePrintReceipt,
@@ -688,14 +762,86 @@ const StudentDashboardContent = ({
   setShowBalance,
   showNotifications,
   setShowNotifications,
-  showNotificationModal,
-  setShowNotificationModal,
-  notificationMessage,
   user,
   currentTime,
   loadingResults
 }: any) => {
   const { student, financials } = dashboardData || {};
+  const [showResultModal, setShowResultModal] = React.useState(false);
+  const [selectedResult, setSelectedResult] = React.useState<any>(null);
+
+  const openResult = (r: any) => { setSelectedResult(r); setShowResultModal(true); };
+  const printResult = () => {
+    if (!selectedResult) return;
+    const collegeName = (dashboardData as any)?.college?.name || 'College Name';
+  const totalGradePoints = (selectedResult.subjects || []).reduce((sum:number, s:any) => sum + Number(s.gradePoint||0), 0);
+    const html = `<!DOCTYPE html><html><head><title>Result</title><style>
+      body { font-family: Arial, sans-serif; padding: 24px; }
+      h1 { margin: 0 0 8px; text-align:center; font-size: 32px; }
+      .sub { text-align:center; margin-bottom: 16px; color: #444; }
+      .info { margin-top: 16px; }
+      .info .row { display:flex; justify-content:space-between; padding: 4px 0; border-bottom: 1px dashed #ddd; }
+      table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+      th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+      th { background:#f7f7f7; }
+      .badge { display:inline-block; padding:4px 8px; border-radius:8px; font-weight:600; }
+      .pass { background:#dcfce7; color:#166534; }
+      .fail { background:#fee2e2; color:#991b1b; }
+      tfoot td { font-weight: bold; background:#fafafa; }
+      .notes { font-size: 12px; margin-top: 16px; color:#b91c1c; }
+      .notes li { margin: 6px 0; }
+      .signature { margin-top: 40px; display:flex; justify-content:flex-end; }
+      .sign-box { text-align:center; min-width: 260px; }
+      .sign-line { border-bottom: 1px solid #333; height: 36px; margin-bottom: 6px; }
+    </style></head><body>
+      <h1><b>${collegeName}</b></h1>
+      <div class="sub">Examination Result</div>
+      <!-- Student Info First -->
+      <div class="info">
+        <div class="row"><span><b>Name</b></span><span>${student?.firstName || ''} ${student?.lastName || ''}</span></div>
+        <div class="row"><span><b>Regd No</b></span><span>${student?.regdNo || ''}</span></div>
+        <div class="row"><span><b>Branch</b></span><span>${student?.branch?.name || ''} (${student?.branch?.code || ''})</span></div>
+        <div class="row"><span><b>Semester</b></span><span>${selectedResult.semester}</span></div>
+        <div class="row"><span><b>Academic Year</b></span><span>${selectedResult.academicYear}</span></div>
+        <div class="row"><span><b>Status</b></span><span><span class="badge ${selectedResult.status==='Pass'?'pass':'fail'}">${selectedResult.status}</span></span></div>
+      </div>
+      
+      <table><thead><tr>
+        <th>Code</th><th>Subject</th><th>Credits</th><th>Max Marks</th><th>Marks Obtained</th><th>GP</th><th>Grade</th>
+      </tr></thead><tbody>
+        ${(selectedResult.subjects||[]).map((s:any)=>`<tr><td>${s.code||''}</td><td>${s.name||''}</td><td>${s.credits||0}</td><td>${s.maxMarks||0}</td><td>${s.marksObtained||0}</td><td>${s.gradePoint||0}</td><td>${s.grade||''}</td></tr>`).join('')}
+      </tbody>
+      <tfoot>
+        <tr>
+      <td colspan="5"></td>
+      <td colspan="2">Total GP: ${totalGradePoints.toFixed(2)}</td>
+        </tr>
+      </tfoot>
+      </table>
+      <!-- SGPA/CGPA After Table -->
+      <div class="info">
+        <div class="row"><span><b>SGPA</b></span><span>${Number(selectedResult.sgpa || 0).toFixed(2)}</span></div>
+        <div class="row"><span><b>CGPA</b></span><span>${typeof cgpa==='number'? cgpa.toFixed(2): '-'}</span></div>
+      </div>
+      <div class="signature">
+        <div class="sign-box">
+          <div class="sign-line"></div>
+          <div><b>Director of Examination</b></div>
+        </div>
+      </div>
+      <ol class="notes">
+        <li>The result is provisional.</li>
+        <li>In case of any typological error or discrepancy, the student is required to report at their respective college for necessary intimation to the University.</li>
+        <li>As per the provision of the Grading System of the University 'M' denotes MALPRACTICE (Grade Point 0) and 'S' denotes ABSENT (Grade Point 0) and F Grade in (Int=Internal, Ext=External, Pr=Practical).</li>
+        <li>The SGPA shown for the subjects displayed in this page.</li>
+        <li>WhOR(I) - Result Withheld for Non-Submission / Receipt of Registered Internal / Sessional / Practical.</li>
+        <li>MPR - Malpractice Reported.</li>
+        <li>Rechecking results will be marked with an asterisk (*) symbol.</li>
+      </ol>
+    </body></html>`;
+    const w = window.open('', '_blank');
+    if (w) { w.document.write(html); w.document.close(); w.focus(); w.print(); }
+  };
 
   return (
     <div className="flex flex-1 flex-col h-full bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900 transition-all duration-300">
@@ -740,6 +886,17 @@ const StudentDashboardContent = ({
             </div>
 
             <div className="flex items-center space-x-4">
+              {/* Refresh Button */}
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className={`p-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors ${refreshing ? 'opacity-60 cursor-not-allowed' : ''}`}
+                title="Refresh data"
+              >
+                <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
+              </motion.button>
               {/* Search Bar */}
               <motion.div 
                 whileHover={{ scale: 1.02 }}
@@ -1201,7 +1358,7 @@ const StudentDashboardContent = ({
                     <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                       <thead className="bg-gray-50 dark:bg-gray-800/50">
                         <tr>
-                          {['Date', 'Type', 'Amount', 'Status', 'Receipt'].map((header) => (
+                          {['Date', 'Type', 'Amount', 'Mode', 'Status', 'Receipt'].map((header) => (
                             <th key={header} className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                               {header}
                             </th>
@@ -1245,6 +1402,17 @@ const StudentDashboardContent = ({
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-white">
                                 ₹{payment.amount.toLocaleString()}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className="inline-flex px-3 py-1 text-xs font-semibold rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-200 capitalize">
+                                  {(() => {
+                                    const method = (payment.paymentMethod || '').toLowerCase();
+                                    if (method === 'cash') return 'Cash';
+                                    if (method === 'cheque') return 'Cheque';
+                                    if (['online','razorpay','custom_upi','custom_qr'].includes(method)) return 'Online';
+                                    return (payment.razorpayPaymentId || payment.razorpayOrderId) ? 'Online' : 'Cash/Cheque';
+                                  })()}
+                                </span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <motion.span
@@ -1336,7 +1504,7 @@ const StudentDashboardContent = ({
                         </div>
                         <div>
                           <p className="font-medium text-neutral-900 dark:text-neutral-100">
-                            Receipt #{payment._id.slice(-6)}
+                            Receipt #{payment.receiptNumber || payment._id}
                           </p>
                           <p className="text-sm text-neutral-500 dark:text-neutral-400">
                             Amount: ₹{payment.amount} • {new Date(payment.createdAt).toLocaleDateString()}
@@ -1375,121 +1543,132 @@ const StudentDashboardContent = ({
         )}
 
         {activeTab === 'results' && (
-          <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center space-x-2">
+          <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-2xl p-6 border border-gray-200/50 dark:border-gray-700/50">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
               <BookOpen className="w-6 h-6 text-green-600" />
               <span>Academic Results</span>
             </h2>
-            
             {loadingResults ? (
               <div className="flex justify-center items-center py-12">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
               </div>
             ) : (
-              <div className="text-center py-12 space-y-6">
-                <div className="mx-auto w-24 h-24 bg-gradient-to-r from-green-100 to-blue-100 dark:from-green-900/30 dark:to-blue-900/30 rounded-full flex items-center justify-center">
-                  <BookOpen className="w-12 h-12 text-green-600 dark:text-green-400" />
-                </div>
-                
-                <div>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                    View Your Academic Results
-                  </h3>
-                  <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
-                    Access your complete academic results, semester-wise performance, and detailed grade reports on our dedicated results portal.
-                  </p>
-                </div>
-
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => window.open('https://gyanranjanpriyam.netlify.app', '_blank')}
-                  className="inline-flex items-center space-x-3 px-8 py-4 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
-                >
-                  <BookOpen className="w-5 h-5" />
-                  <span>View Your Results</span>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </motion.button>
-
-                {/* Help Section */}
-                <div className="mt-8 p-6 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-700/50">
-                  <div className="flex items-center justify-center space-x-2 mb-3">
-                    <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <h4 className="font-semibold text-blue-900 dark:text-blue-100">Need Help?</h4>
+              <>
+                {(!results || results.length === 0) ? (
+                  <div className="text-center py-12 text-gray-600 dark:text-gray-300">No results available yet.</div>
+                ) : (
+                  <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                        <thead className="bg-gray-50 dark:bg-gray-700">
+                          <tr>
+                            <th className="px-4 py-3 text-center text-gray-700 dark:text-gray-200">Semester</th>
+                            <th className="px-4 py-3 text-center text-gray-700 dark:text-gray-200">Published</th>
+                            <th className="px-4 py-3 text-center text-gray-700 dark:text-gray-200">SGPA</th>
+                            <th className="px-4 py-3 text-center text-gray-700 dark:text-gray-200">CGPA</th>
+                            <th className="px-4 py-3 text-center text-gray-700 dark:text-gray-200">Status</th>
+                            <th className="px-4 py-3 text-center text-gray-700 dark:text-gray-200">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-100 dark:divide-gray-700">
+                          {results
+                            .sort((a:any,b:any)=> (a.semester||0) - (b.semester||0))
+                            .map((r:any, idx:number) => (
+                              <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                                <td className="px-4 py-3 text-center text-gray-900 dark:text-gray-100">{r.semester}</td>
+                                <td className="px-4 py-3 text-center">
+                                  <span className={`text-xs px-2 py-1 rounded ${r.published? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300':'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'}`}>{r.published? 'Published':'Not Published'}</span>
+                                </td>
+                                <td className="px-4 py-3 text-center text-gray-900 dark:text-gray-100">{Number(r.sgpa||0).toFixed(2)}</td>
+                                <td className="px-4 py-3 text-center text-gray-900 dark:text-gray-100">{typeof cgpa==='number'? cgpa.toFixed(2) : '-'}</td>
+                                <td className="px-4 py-3 text-center">
+                                  <span className={`text-xs px-2 py-1 rounded ${r.status==='Pass'? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300':'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'}`}>{r.status}</span>
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <div className="inline-flex gap-2">
+                                    <button onClick={() => openResult(r)} className="px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700">View</button>
+                                    <button onClick={() => { setSelectedResult(r); setShowResultModal(true); setTimeout(()=>printResult(), 0); }} className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700">Print</button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                  <p className="text-blue-800 dark:text-blue-200 text-sm mb-3">
-                    If you're having trouble accessing your results or need assistance with your academic records, please contact our examination department.
-                  </p>
-                  <div className="flex items-center justify-center space-x-2 text-blue-700 dark:text-blue-300">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
-                    <a 
-                      href="mailto:contact.exam@gyanranjanpriyam.netlify.app" 
-                      className="text-sm font-medium hover:underline"
-                    >
-                      contact.exam@gyanranjanpriyam.netlify.app
-                    </a>
-                  </div>
+                )}
+
+                <div className="mt-4 text-xs bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700 rounded-lg p-3 space-y-1">
+                  <div>1. The result is provisional.</div>
+                  <div>2. In case of any typological error or discrepancy, the student is required to report at their respective college for necessary intimation to the University.</div>
+                  <div>3. As per the provision of the Grading System of the University 'M' denotes MALPRACTICE (Grade Point 0) and 'S' denotes ABSENT (Grade Point 0) and F Grade in (Int=Internal, Ext=External, Pr=Practical).</div>
+                  <div>4. The SGPA shown for the subjects displayed in this page.</div>
+                  <div>5. WhOR(I) - Result Withheld for Non-Submission / Receipt of Registered Internal / Sessional / Practical.</div>
+                  <div>6. MPR - Malpractice Reported.</div>
+                  <div>7. Rechecking results will be marked with an asterisk (*) symbol.</div>
                 </div>
-              </div>
+              </>
             )}
           </div>
         )}
       </div>
 
-      {/* Notification Modal */}
+      {/* Result Modal */}
       <AnimatePresence>
-        {showNotificationModal && (
+        {showResultModal && selectedResult && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
           >
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white dark:bg-gray-800 rounded-2xl p-8 max-w-md w-full"
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-4xl border border-gray-200 dark:border-gray-700"
             >
-              <div className="text-center">
-                <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
-                  notificationMessage.includes('failed') || notificationMessage.includes('cancelled')
-                    ? 'bg-red-100 dark:bg-red-900/30'
-                    : notificationMessage.includes('pending')
-                    ? 'bg-yellow-100 dark:bg-yellow-900/30'
-                    : 'bg-green-100 dark:bg-green-900/30'
-                }`}>
-                  {notificationMessage.includes('failed') || notificationMessage.includes('cancelled') ? (
-                    <AlertCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
-                  ) : notificationMessage.includes('pending') ? (
-                    <Clock className="w-8 h-8 text-yellow-600 dark:text-yellow-400" />
-                  ) : (
-                    <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
-                  )}
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">Semester {selectedResult.semester} • {selectedResult.academicYear}</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-300">SGPA: {Number(selectedResult.sgpa||0).toFixed(2)} • CGPA: {typeof cgpa==='number'? cgpa.toFixed(2) : '-'}</div>
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                  {notificationMessage.includes('failed') || notificationMessage.includes('cancelled')
-                    ? 'Payment Failed'
-                    : notificationMessage.includes('pending')
-                    ? 'Payment Submitted'
-                    : 'Payment Status'}
-                </h3>
-                <p className="text-gray-600 dark:text-gray-300 mb-6">
-                  {notificationMessage}
-                </p>
-                <button
-                  onClick={() => setShowNotificationModal(false)}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
-                >
-                  OK
-                </button>
+                <div className="flex gap-2">
+                  <button onClick={printResult} className="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm">Print</button>
+                  <button onClick={() => setShowResultModal(false)} className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm">Close</button>
+                </div>
               </div>
+
+              <div className="overflow-auto rounded-xl border border-gray-200 dark:border-gray-700">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                      <th className="p-3 border border-gray-200 dark:border-gray-700 text-center text-gray-700 dark:text-gray-200">Code</th>
+                      <th className="p-3 border border-gray-200 dark:border-gray-700 text-center text-gray-700 dark:text-gray-200">Subject</th>
+                      <th className="p-3 border border-gray-200 dark:border-gray-700 text-center text-gray-700 dark:text-gray-200">Credits</th>
+                      <th className="p-3 border border-gray-200 dark:border-gray-700 text-center text-gray-700 dark:text-gray-200">Max Marks</th>
+                      <th className="p-3 border border-gray-200 dark:border-gray-700 text-center text-gray-700 dark:text-gray-200">Marks Obtained</th>
+                      <th className="p-3 border border-gray-200 dark:border-gray-700 text-center text-gray-700 dark:text-gray-200">GP</th>
+                      <th className="p-3 border border-gray-200 dark:border-gray-700 text-center text-gray-700 dark:text-gray-200">Grade</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {(selectedResult.subjects||[]).map((s:any, i:number)=> (
+                      <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                        <td className="p-3 border border-gray-200 dark:border-gray-700 text-center text-gray-900 dark:text-gray-100">{s.code}</td>
+                        <td className="p-3 border border-gray-200 dark:border-gray-700 text-center text-gray-900 dark:text-gray-100">{s.name}</td>
+                        <td className="p-3 border border-gray-200 dark:border-gray-700 text-center text-gray-900 dark:text-gray-100">{s.credits}</td>
+                        <td className="p-3 border border-gray-200 dark:border-gray-700 text-center text-gray-900 dark:text-gray-100">{s.maxMarks}</td>
+                        <td className="p-3 border border-gray-200 dark:border-gray-700 text-center text-gray-900 dark:text-gray-100">{s.marksObtained}</td>
+                        <td className="p-3 border border-gray-200 dark:border-gray-700 text-center text-gray-900 dark:text-gray-100">{s.gradePoint}</td>
+                        <td className="p-3 border border-gray-200 dark:border-gray-700 text-center text-gray-900 dark:text-gray-100">{s.grade}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-3 text-sm text-gray-700 dark:text-gray-300">Status: <b className={`${selectedResult.status==='Pass'?'text-emerald-600' :'text-rose-600'}`}>{selectedResult.status}</b></div>
             </motion.div>
           </motion.div>
         )}

@@ -290,7 +290,7 @@ router.post('/add-payment', auth, financeAuth, async (req, res) => {
 router.put('/update-status/:transactionId', auth, financeAuth, async (req, res) => {
   try {
     const { transactionId } = req.params;
-    const { status } = req.body;
+  const { status, paymentMethod } = req.body;
 
     if (!['pending', 'completed', 'failed', 'cancelled'].includes(status)) {
       return res.status(400).json({
@@ -299,7 +299,7 @@ router.put('/update-status/:transactionId', auth, financeAuth, async (req, res) 
       });
     }
 
-    const payment = await Payment.findById(transactionId).populate('student');
+  const payment = await Payment.findById(transactionId).populate('student');
     if (!payment) {
       return res.status(404).json({
         success: false,
@@ -307,14 +307,43 @@ router.put('/update-status/:transactionId', auth, financeAuth, async (req, res) 
       });
     }
 
-    const oldStatus = payment.status;
-    payment.status = status;
+  const oldStatus = payment.status;
+  payment.status = status;
 
     // Update paid date if status is completed
     if (status === 'completed' && oldStatus !== 'completed') {
       payment.paidDate = new Date();
       if (!payment.transactionId) {
         payment.transactionId = `TXN_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      }
+
+      // Detect or set payment method for completed payments
+      const normalize = (m) => (m || '').toString().toLowerCase();
+      const requestedMethod = normalize(paymentMethod);
+      const isGatewayPresent = !!(payment.razorpayOrderId || payment.razorpayPaymentId || payment.cashfreeOrderId || payment.cashfreePaymentId);
+
+      if (requestedMethod && ['online','cash','cheque','custom_upi','custom_qr','razorpay'].includes(requestedMethod)) {
+        payment.paymentMethod = requestedMethod;
+      } else if (isGatewayPresent) {
+        // Mark as online/razorpay when gateway references exist
+        if (payment.razorpayOrderId || payment.razorpayPaymentId) {
+          payment.paymentMethod = 'razorpay';
+        } else {
+          payment.paymentMethod = 'online';
+        }
+      } else if (!payment.paymentMethod || ['online', 'razorpay'].includes(normalize(payment.paymentMethod))) {
+        // Default offline completions to cash when no gateway proofs and no explicit method provided
+        payment.paymentMethod = 'cash';
+      }
+    }
+
+    // Allow updating payment method explicitly whenever provided (including when already completed)
+    if (paymentMethod) {
+      const normalize = (m) => (m || '').toString().toLowerCase();
+      const requestedMethod = normalize(paymentMethod);
+      const validMethods = ['online','cash','cheque','custom_upi','custom_qr','razorpay'];
+      if (validMethods.includes(requestedMethod)) {
+        payment.paymentMethod = requestedMethod;
       }
     }
 
@@ -350,14 +379,15 @@ router.put('/update-status/:transactionId', auth, financeAuth, async (req, res) 
 
     await notification.save();
 
-    res.json({
+  res.json({
       success: true,
       message: 'Payment status updated successfully',
       payment: {
         id: payment._id,
         status: payment.status,
         paidDate: payment.paidDate,
-        transactionId: payment.transactionId
+    transactionId: payment.transactionId,
+    paymentMethod: payment.paymentMethod
       }
     });
 

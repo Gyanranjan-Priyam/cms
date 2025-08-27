@@ -28,6 +28,8 @@ const branchRoutes = require('./routes/branches');
 const dashboardRoutes = require('./routes/dashboard');
 const paymentsRoutes = require('./routes/payments');
 const razorpayRoutes = require('./routes/razorpayRoutes');
+const subjectsRoutes = require('./routes/subjects');
+const resultsRoutes = require('./routes/results');
 
 // New University Management System routes
 const adminRoutes = require('./routes/admin');
@@ -49,8 +51,7 @@ app.use(cors({
   origin: [
     "http://localhost:5173", 
     "http://localhost:5174",
-    "https://your-frontend-domain.vercel.app",
-    "https://cms-frontend.vercel.app",
+    "https://cms-gyanranjanpriyam.netlify.app/",
     /\.vercel\.app$/,
     /\.netlify\.app$/
   ],
@@ -83,7 +84,9 @@ mongoose.connect(process.env.MONGODB_URI, {
 app.use('/api/auth', authRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/branches', branchRoutes);
+app.use('/api/subjects', subjectsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/results', resultsRoutes);
 // app.use('/api/results', resultRoutes);
 // app.use('/api/attendance', attendanceRoutes);
 app.use('/api/payments', paymentsRoutes);

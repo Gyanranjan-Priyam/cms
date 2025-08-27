@@ -23,6 +23,7 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [showSessionWarning, setShowSessionWarning] = useState(false);
+  const [isMobileBlocked, setIsMobileBlocked] = useState(false);
 
   // Session timeout configuration (10 minutes)
   const SESSION_TIMEOUT = 10 * 60 * 1000; // 10 minutes in milliseconds
@@ -70,6 +71,15 @@ function App() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
+    const checkMobile = () => {
+      const ua = navigator.userAgent || navigator.vendor || (window as any).opera || '';
+      const isUAForMobile = /android|iphone|ipad|ipod|iemobile|blackberry|opera mini|mobile/i.test(ua);
+      const isSmallViewport = window.matchMedia('(max-width: 767px)').matches;
+      setIsMobileBlocked(isUAForMobile || isSmallViewport);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    window.addEventListener('orientationchange', checkMobile);
     
     if (token && userData) {
       try {
@@ -82,6 +92,10 @@ function App() {
       }
     }
     setLoading(false);
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+      window.removeEventListener('orientationchange', checkMobile);
+    };
   }, []);
 
   const handleLogin = (userData: User, token: string) => {
@@ -113,6 +127,20 @@ function App() {
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Block mobile devices with a full-screen message
+  if (isMobileBlocked) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-gray-900 text-white p-6 text-center">
+        <div className="max-w-md">
+          <h1 className="text-2xl font-semibold mb-4">Notice</h1>
+          <p className="leading-relaxed">
+            the website is not designed for mobile for better experience open it in desktop. Thank you for undersanding
+          </p>
         </div>
       </div>
     );

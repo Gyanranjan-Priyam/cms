@@ -9,7 +9,8 @@ import {
   Search,
   GraduationCap,
   School,
-  BarChart3,
+  BookOpen,
+  FileText,
   Moon,
   Sun,
   Home,
@@ -35,11 +36,21 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recha
 import axios from 'axios';
 import { getApiUrl } from '../config/api';
 import { Table } from '../components/ui/simple-table';
+import Examination from './Examination';
 
 interface AdminDashboardProps {
   user: any;
   onLogout: () => void;
 }
+
+// Unified recent activity item shape
+type ActivityItem = {
+  type: 'student' | 'payment';
+  message: string;
+  time: Date;
+  timeText: string;
+  icon: React.ComponentType<{ className?: string }>;
+};
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -50,11 +61,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
+  // Recent activity state (real data)
+  const [recentStudents, setRecentStudents] = useState<any[]>([]);
+  const [recentPayments, setRecentPayments] = useState<any[]>([]);
 
   // Student Management States
   const [students, setStudents] = useState([]);
   const [branches, setBranches] = useState([]);
   const [branchStats, setBranchStats] = useState([]);
+  // Subjects management state
+  const [subjects, setSubjects] = useState<any[]>([]);
+  const [subjectFilters, setSubjectFilters] = useState<{ branch: string; semester: string; search: string; activeOnly: boolean }>({ branch: '', semester: '', search: '', activeOnly: true });
+  const [showSubjectModal, setShowSubjectModal] = useState(false);
+  const [selectedSubject, setSelectedSubject] = useState<any | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
@@ -80,6 +99,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     fetchDashboardData();
     fetchNotifications();
     fetchBranches();
+  fetchRecentActivities();
     const theme = localStorage.getItem('theme');
     if (theme === 'dark') {
       setDarkMode(true);
@@ -92,8 +112,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       fetchStudents();
     } else if (activeTab === 'overview') {
       fetchBranchStats();
+    } else if (activeTab === 'subjects') {
+      fetchSubjects();
     }
   }, [activeTab, filters, currentPage]);
+
+  // Refresh subjects when subject filters change
+  useEffect(() => {
+    if (activeTab === 'subjects') {
+      fetchSubjects();
+    }
+  }, [subjectFilters, activeTab]);
 
   useEffect(() => {
     // Apply dark mode to document
@@ -129,6 +158,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     }
   };
 
+  // Fetch recent activities (students + payments) from head-admin dashboard
+  const fetchRecentActivities = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(getApiUrl('api/dashboard/head-admin'), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const ra = response.data?.dashboard?.recentActivities || {};
+      setRecentStudents(ra.students || []);
+      setRecentPayments(ra.payments || []);
+    } catch (error) {
+      console.error('Error fetching recent activities:', error);
+      setRecentStudents([]);
+      setRecentPayments([]);
+    }
+  };
+
   const fetchStudents = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -158,6 +204,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       setBranches(response.data); // Backend returns array directly
     } catch (error) {
       console.error('Error fetching branches:', error);
+    }
+  };
+
+  const fetchSubjects = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams();
+      if (subjectFilters.branch) params.append('branch', subjectFilters.branch);
+  if (subjectFilters.search) params.append('search', subjectFilters.search);
+  if (subjectFilters.semester) params.append('semester', subjectFilters.semester);
+      if (subjectFilters.activeOnly) params.append('activeOnly', 'true');
+      const response = await axios.get(getApiUrl(`api/subjects?${params.toString()}`), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSubjects(response.data.data || []);
+    } catch (error) {
+      console.error('Error fetching subjects:', error);
     }
   };
 
@@ -398,6 +461,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       await Promise.all([
         fetchDashboardData(), 
         fetchNotifications(),
+  fetchRecentActivities(),
         activeTab === 'students' ? fetchStudents() : Promise.resolve(),
         activeTab === 'overview' ? fetchBranchStats() : Promise.resolve()
       ]);
@@ -464,11 +528,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       action: () => setActiveTab('students')
     },
     {
-      title: 'View Analytics',
-      description: 'Check performance metrics',
-      icon: BarChart3,
+      title: 'Manage Subjects',
+      description: 'Add or edit branch subjects',
+      icon: BookOpen,
       color: 'purple',
-      action: () => setActiveTab('analytics')
+      action: () => setActiveTab('subjects')
     },
     {
       title: 'System Settings',
@@ -479,12 +543,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     }
   ];
 
-  const recentActivities = [
-    { type: 'student', message: 'New student registration: John Doe', time: '2 minutes ago', icon: Users },
-    { type: 'payment', message: 'Payment received: ₹25,000', time: '5 minutes ago', icon: DollarSign },
-    { type: 'system', message: 'System backup completed', time: '1 hour ago', icon: CheckCircle },
-    { type: 'alert', message: 'Payment reminder sent to 15 students', time: '2 hours ago', icon: Bell }
-  ];
+  // Build a unified, time-sorted recent activities list from real data
+  const recentActivities = React.useMemo<ActivityItem[]>(() => {
+    const studentItems: ActivityItem[] = (recentStudents || []).map((s: any) => {
+      const time = s.createdAt ? new Date(s.createdAt) : new Date(0);
+      return {
+        type: 'student',
+        message: `New student registration: ${s.firstName || ''} ${s.lastName || ''} (${s.regdNo || 'N/A'})${s.branch?.code ? ` • ${s.branch.code}` : ''}${s.semester ? ` • Sem ${s.semester}` : ''}`.trim(),
+        time,
+        timeText: time.toLocaleString(),
+        icon: Users
+      };
+    });
+    const paymentItems: ActivityItem[] = (recentPayments || []).map((p: any) => {
+      const time = p.paymentDate ? new Date(p.paymentDate) : new Date(0);
+      return {
+        type: 'payment',
+        message: `Payment received: ₹${Number(p.amount || 0).toLocaleString()}${p.paymentType ? ` • ${p.paymentType}` : ''}${p.student ? ` • ${p.student.firstName || ''} ${p.student.lastName || ''} (${p.student.regdNo || 'N/A'})` : ''}`.trim(),
+        time,
+        timeText: time.toLocaleString(),
+        icon: DollarSign
+      };
+    });
+    return [...studentItems, ...paymentItems]
+      .sort((a, b) => b.time.getTime() - a.time.getTime())
+      .slice(0, 10);
+  }, [recentStudents, recentPayments]);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -532,9 +616,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         {/* Sidebar Header */}
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
-              <GraduationCap className="w-5 h-5 text-white" />
-            </div>
+            {sidebarExpanded && (
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
+                <GraduationCap className="w-5 h-5 text-white" />
+              </div>
+            )}
             <motion.div
               initial={{ opacity: 0, width: 0 }}
               animate={{ 
@@ -554,10 +640,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
 
         {/* Navigation Items */}
         <nav className="p-2 space-y-1">
-          {[
+            {[ 
             { id: 'overview', label: 'Overview', icon: Home },
             { id: 'students', label: 'Student Management', icon: Users },
-            { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+            { id: 'subjects', label: 'Subjects', icon: BookOpen },
+            { id: 'exams', label: 'Examinations', icon: FileText },
             { id: 'settings', label: 'Settings', icon: Settings }
           ].map((tab) => (
             <motion.button
@@ -820,7 +907,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
             {[
               { id: 'overview', label: 'Overview', icon: Home },
               { id: 'students', label: 'Student Management', icon: Users },
-              { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+              { id: 'subjects', label: 'Subjects', icon: BookOpen },
+              { id: 'exams', label: 'Examinations', icon: FileText },
               { id: 'settings', label: 'Settings', icon: Settings }
             ].map((tab) => (
               <motion.button
@@ -989,7 +1077,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                             <p className={`text-xs ${
                               darkMode ? 'text-gray-500' : 'text-gray-500'
                             }`}>
-                              {activity.time}
+                              {activity.timeText}
                             </p>
                           </div>
                         </motion.div>
@@ -1070,6 +1158,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
               </>
             )}
           </motion.div>
+        )}
+        {activeTab === 'exams' && (
+          <div>
+            <Examination />
+          </div>
         )}
 
         {/* Student Management Tab */}
@@ -1429,22 +1522,165 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
           </motion.div>
         )}
 
-        {/* Analytics Tab */}
-        {activeTab === 'analytics' && (
+        {/* Subjects Tab */}
+        {activeTab === 'subjects' && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`rounded-xl shadow-lg p-6 ${
-              darkMode ? 'bg-gray-800' : 'bg-white'
-            }`}
+            className={`space-y-6 rounded-xl ${darkMode ? '' : ''}`}
           >
-            <h3 className="text-xl font-bold mb-6">Analytics Dashboard</h3>
-            <div className="text-center py-12">
-              <BarChart3 className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-              <p className={`text-lg ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                Analytics dashboard coming soon
-              </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Subject Management</h3>
+                <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Create and manage subjects per branch</p>
+              </div>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => { setSelectedSubject(null); setShowSubjectModal(true); }}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-medium transition-all flex items-center space-x-2"
+              >
+                <Plus className="w-5 h-5" />
+                <span>Add Subject</span>
+              </motion.button>
             </div>
+
+            {/* Filters */}
+            <div className={`rounded-xl p-4 border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div>
+                  <label className={`block text-sm mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Branch</label>
+                  <select
+                    value={subjectFilters.branch}
+                    onChange={(e) => setSubjectFilters(prev => ({ ...prev, branch: e.target.value }))}
+                    onBlur={fetchSubjects}
+                    className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
+                  >
+                    <option value="">All Branches</option>
+                    {(branches || []).map((b: any) => (
+                      <option key={b._id} value={b._id}>{b.name} ({b.code})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={`block text-sm mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Semester</label>
+                  <select
+                    value={subjectFilters.semester}
+                    onChange={(e) => setSubjectFilters(prev => ({ ...prev, semester: e.target.value }))}
+                    onBlur={fetchSubjects}
+                    className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
+                  >
+                    <option value="">All</option>
+                    {[1,2,3,4,5,6,7,8].map(s => (
+                      <option key={s} value={String(s)}>Semester {s}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={`block text-sm mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Search</label>
+                  <input
+                    value={subjectFilters.search}
+                    onChange={(e) => setSubjectFilters(prev => ({ ...prev, search: e.target.value }))}
+                    onKeyDown={(e) => e.key === 'Enter' && fetchSubjects()}
+                    placeholder="Name or code"
+                    className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
+                  />
+                </div>
+                <div className="flex items-end">
+                  <label className="inline-flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={subjectFilters.activeOnly}
+                      onChange={(e) => { setSubjectFilters(prev => ({ ...prev, activeOnly: e.target.checked })); setTimeout(fetchSubjects, 0); }}
+                      className="mr-2"
+                    />
+                    <span className={`${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Active only</span>
+                  </label>
+                </div>
+              </div>
+              <div className="mt-3">
+                <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={fetchSubjects} className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-gray-700 text-white' : 'bg-gray-100'}`}>Apply</motion.button>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className={`rounded-2xl shadow-xl overflow-hidden border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+              <div className="overflow-x-auto">
+                <Table.Root className={`${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  <Table.Caption className={`${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Subjects</Table.Caption>
+                  <Table.Head className={`${darkMode ? 'bg-gray-700/50' : 'bg-gray-50/50'}`}>
+                    <Table.Row>
+                      <Table.Header className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Subject</Table.Header>
+                      <Table.Header className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Code</Table.Header>
+                      <Table.Header className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Branch</Table.Header>
+                      <Table.Header className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Semester</Table.Header>
+                      <Table.Header className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Status</Table.Header>
+                      <Table.Header textAlign="right" className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Actions</Table.Header>
+                    </Table.Row>
+                  </Table.Head>
+                  <Table.Body className={`divide-y ${darkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
+                    {(subjects || []).length === 0 ? (
+                      <Table.Row>
+                        <Table.Cell colSpan={5} textAlign="center">
+                          <div className="py-8 text-sm">No subjects found</div>
+                        </Table.Cell>
+                      </Table.Row>
+                    ) : (
+                      (subjects || []).map((s: any) => (
+                        <Table.Row key={s._id} className={`transition-colors ${darkMode ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}>
+                          <Table.Cell>
+                            <div className="font-medium">{s.name}</div>
+                            <div className={`${darkMode ? 'text-gray-400' : 'text-gray-500'} text-sm`}>{s.description || '—'}</div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <span className="text-sm font-mono bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 px-3 py-1 rounded-full">{s.code}</span>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <div className="text-sm">{s.branch?.name}</div>
+                            <div className={`${darkMode ? 'text-gray-400' : 'text-gray-500'} text-sm`}>{s.branch?.code}</div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${darkMode ? 'bg-indigo-900/30 text-indigo-300' : 'bg-indigo-100 text-indigo-800'}`}>Sem {s.semester}</span>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                              s.isActive ? (darkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-100 text-green-800') : (darkMode ? 'bg-red-900/30 text-red-300' : 'bg-red-100 text-red-800')
+                            }`}>{s.isActive ? 'Active' : 'Inactive'}</span>
+                          </Table.Cell>
+                          <Table.Cell textAlign="right">
+                            <div className="flex items-center justify-end space-x-2">
+                              <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => { setSelectedSubject(s); setShowSubjectModal(true); }} className={`p-2 rounded-lg ${darkMode ? 'text-green-400 hover:bg-green-900/30' : 'text-green-600 hover:bg-green-100'}`} title="Edit Subject"><Edit3 className="w-4 h-4" /></motion.button>
+                              <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={async () => {
+                                const confirm = window.confirm(`Deactivate subject ${s.name}?`);
+                                if (!confirm) return;
+                                try {
+                                  const token = localStorage.getItem('token');
+                                  await axios.delete(getApiUrl(`api/subjects/${s._id}`), { headers: { Authorization: `Bearer ${token}` } });
+                                  fetchSubjects();
+                                } catch (e) { console.error(e); alert('Failed to delete subject'); }
+                              }} className={`p-2 rounded-lg ${darkMode ? 'text-red-400 hover:bg-red-900/30' : 'text-red-600 hover:bg-red-100'}`} title="Delete Subject"><Trash2 className="w-4 h-4" /></motion.button>
+                            </div>
+                          </Table.Cell>
+                        </Table.Row>
+                      ))
+                    )}
+                  </Table.Body>
+                </Table.Root>
+              </div>
+            </div>
+
+            {/* Subject Modal */}
+            <AnimatePresence>
+              {showSubjectModal && (
+                <SubjectModal
+                  subject={selectedSubject}
+                  branches={branches}
+                  onClose={() => { setShowSubjectModal(false); setSelectedSubject(null); }}
+                  onSave={() => { setShowSubjectModal(false); setSelectedSubject(null); fetchSubjects(); }}
+                  darkMode={darkMode}
+                />
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
 
@@ -3063,3 +3299,130 @@ const StudentModal: React.FC<{
 };
 
 export default AdminDashboard;
+
+// Subject Modal Component
+const SubjectModal: React.FC<{
+  subject: any | null;
+  branches: any[];
+  onClose: () => void;
+  onSave: () => void;
+  darkMode: boolean;
+}> = ({ subject, branches, onClose, onSave, darkMode }) => {
+  const isEdit = !!subject?._id;
+  const [form, setForm] = useState({
+    name: subject?.name || '',
+    code: subject?.code || '',
+    branch: subject?.branch?._id || subject?.branch || '',
+    description: subject?.description || '',
+    semester: subject?.semester || 1,
+    isActive: subject?.isActive ?? true
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleChange = (key: string, value: any) => setForm(prev => ({ ...prev, [key]: value }));
+
+  const submit = async () => {
+    if (!form.name || !form.code || !form.branch) {
+      alert('Name, code and branch are required');
+      return;
+    }
+    setSaving(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (isEdit) {
+        await axios.put(getApiUrl(`api/subjects/${subject._id}`), {
+          name: form.name,
+          code: form.code,
+          branch: form.branch,
+          description: form.description,
+          semester: form.semester,
+          isActive: form.isActive
+        }, { headers: { Authorization: `Bearer ${token}` } });
+      } else {
+        await axios.post(getApiUrl('api/subjects'), {
+          name: form.name,
+          code: form.code,
+          branch: form.branch,
+          description: form.description,
+          semester: form.semester
+        }, { headers: { Authorization: `Bearer ${token}` } });
+      }
+      onSave();
+    } catch (e: any) {
+      console.error('Error saving subject', e);
+      alert(e?.response?.data?.message || 'Failed to save subject');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.95, opacity: 0, y: 20 }}
+        onClick={(e) => e.stopPropagation()}
+        className={`rounded-2xl p-6 w-full max-w-xl shadow-2xl ${darkMode ? 'bg-gray-800' : 'bg-white'}`}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{isEdit ? 'Edit Subject' : 'Add Subject'}</h3>
+          <button onClick={onClose} className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}><X className="w-4 h-4" /></button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="sm:col-span-2">
+            <label className={`block text-sm mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Subject Name</label>
+            <input value={form.name} onChange={(e) => handleChange('name', e.target.value)} className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`} />
+          </div>
+          <div>
+            <label className={`block text-sm mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Subject Code</label>
+            <input value={form.code} onChange={(e) => handleChange('code', e.target.value)} className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`} />
+          </div>
+          <div>
+            <label className={`block text-sm mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Branch</label>
+            <select value={form.branch} onChange={(e) => handleChange('branch', e.target.value)} className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}>
+              <option value="">Select branch</option>
+              {(branches || []).map((b: any) => (
+                <option key={b._id} value={b._id}>{b.name} ({b.code})</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={`block text-sm mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Semester</label>
+            <select value={form.semester} onChange={(e) => handleChange('semester', parseInt(e.target.value))} className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}>
+              {[1,2,3,4,5,6,7,8].map(s => (
+                <option key={s} value={s}>Semester {s}</option>
+              ))}
+            </select>
+          </div>
+          <div className="sm:col-span-2">
+            <label className={`block text-sm mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Description</label>
+            <textarea value={form.description} onChange={(e) => handleChange('description', e.target.value)} rows={3} className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`} />
+          </div>
+          {isEdit && (
+            <div className="sm:col-span-2">
+              <label className="inline-flex items-center space-x-2">
+                <input type="checkbox" checked={form.isActive} onChange={(e) => handleChange('isActive', e.target.checked)} />
+                <span className={`${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Active</span>
+              </label>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-6 flex justify-end space-x-3">
+          <button onClick={onClose} className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-gray-700 text-white' : 'bg-gray-100'}`}>Cancel</button>
+          <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={submit} disabled={saving} className={`px-5 py-2 rounded-lg text-white ${saving ? 'opacity-60 cursor-not-allowed' : ''} bg-gradient-to-r from-blue-600 to-purple-600`}>
+            {saving ? 'Saving...' : isEdit ? 'Update Subject' : 'Create Subject'}
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
